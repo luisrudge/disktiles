@@ -196,7 +196,7 @@ static class TestHooks
             var delay = (uint)(steps.Count * StepMs + wait * 1000);
             GLib.Functions.TimeoutAdd(GLib.Constants.PRIORITY_DEFAULT, delay, () =>
             {
-                Console.Error.WriteLine($"test: snap {snap}: {Snap(app.Window, snap)}");
+                Console.Error.WriteLine($"test: snap {snap}: {Snap(app.Window, snap).What}");
                 return false;
             });
         }
@@ -270,7 +270,7 @@ static class TestHooks
         }
     }
 
-    static string Snap(Gtk.Window window, string path)
+    static (bool Saved, string What) Snap(Gtk.Window window, string path)
     {
         var (w, h) = (window.GetWidth(), window.GetHeight());
         var scale = window.GetScaleFactor();
@@ -279,10 +279,37 @@ static class TestHooks
         Gtk.WidgetPaintable.New(window).Snapshot(snapshot, w, h);
         if (snapshot.ToNode() is not { } node || window.GetRenderer() is not { } renderer)
         {
-            return "nothing drawn";
+            return (false, "nothing drawn");
         }
         var texture = renderer.RenderTexture(node, null);
-        return texture.SaveToPng(path) ? $"{texture.GetWidth()}x{texture.GetHeight()}" : "could not save";
+        return texture.SaveToPng(path) ? (true, $"{texture.GetWidth()}x{texture.GetHeight()}") : (false, "could not save");
+    }
+
+    /// --snapshot, in every build: once the first scan is shown, activate
+    /// again (the window comes forward, no second one opens), draw the window
+    /// to `png` and quit. The release workflow runs it on each package.
+    public static void SelfCheck(Gtk.Application application, App app, string png, Action<bool> done)
+    {
+        var started = false;
+        app.State.TreeChanged += () =>
+        {
+            if (started)
+            {
+                return;
+            }
+            started = true;
+            // A second for the window to lay the tiles out and draw them.
+            GLib.Functions.TimeoutAdd(GLib.Constants.PRIORITY_DEFAULT, 1000, () =>
+            {
+                application.Activate();
+                var oneWindow = application.GetActiveWindow() == app.Window;
+                var (saved, what) = Snap(app.Window, png);
+                Console.Error.WriteLine($"snapshot {png}: {what}{(oneWindow ? "" : "; activating again opened a second window")}");
+                done(saved && oneWindow);
+                application.Quit();
+                return false;
+            });
+        };
     }
 
     static double[]? Points(string variable) => Parse(Environment.GetEnvironmentVariable(variable));

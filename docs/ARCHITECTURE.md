@@ -135,6 +135,8 @@ The rest act for the user, so they exist only in debug builds and in
 | `DISKTILES_SNAP=file.png[,s]` | The window rendered to a PNG by GTK's own renderer, s seconds (default 2) after the steps. It works while the screen is locked: the compositor never takes part |
 | `DISKTILES_SAVE_TO=file`, `DISKTILES_CLIPBOARD_TO=file` | The review's `s` and `a` write here instead of the portal's save dialog and the clipboard |
 
+Release builds keep one of these, as an option: `disktiles --snapshot file.png [PATH]` draws the window to a PNG once the first scan is shown, checks that activating again opened no second window, and quits, 1 if either failed. The release workflow runs it on every package.
+
 With `DISKTILES_TRACE=1` the trail, the filter, the sibling menu and git also log what they show.
 
 Coordinates are logical pixels in the treemap. After the first scan, once there are tiles, the click plays first, then the scroll, then the crumb, then the keys, 150 ms apart. Each step logs `test: ... folder [crumbs], selected [crumbs]` to stderr. A new hook is another `steps.Enqueue(("what", () => ...))` in `AfterScan`.

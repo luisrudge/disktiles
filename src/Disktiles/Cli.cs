@@ -5,8 +5,9 @@ using Disktiles.Core;
 
 namespace Disktiles;
 
-/// What the command line asked for. `Power` is null for a custom worker count.
-sealed record Cli(string Root, ScanOptions Options, uint Depth, Power? Power)
+/// What the command line asked for. `Power` is null for a custom worker count;
+/// `Snapshot` is the PNG --snapshot draws the window to.
+sealed record Cli(string Root, ScanOptions Options, uint Depth, Power? Power, string? Snapshot = null)
 {
     /// Set by Program before the window opens; Scanning starts from it.
     public static Cli Current { get; set; } = null!;
@@ -41,6 +42,8 @@ sealed record Cli(string Root, ScanOptions Options, uint Depth, Power? Power)
                                 miser, balanced (default), aggressive, drain-my-battery
               --scan-threads N  fixed scan workers, capped by available CPU count
               --metric files    rank by file count instead of bytes
+              --snapshot FILE   draw the window to a PNG once the scan is shown,
+                                then quit: a check that GTK loads and draws
           -V, --version         print the version
           -h, --help            show this help
 
@@ -55,6 +58,7 @@ sealed record Cli(string Root, ScanOptions Options, uint Depth, Power? Power)
         Power? power = saved;
         uint depth = 3;
         var disk = false;
+        string? snapshot = null;
         for (var i = 0; i < args.Length; i++)
         {
             var arg = args[i];
@@ -89,6 +93,7 @@ sealed record Cli(string Root, ScanOptions Options, uint Depth, Power? Power)
                             : throw new ArgumentException("--scan-threads must be positive"),
                     };
                     break;
+                case "--snapshot": snapshot = Next("--snapshot needs a file"); break;
                 case "--metric":
                     options = options with
                     {
@@ -124,7 +129,7 @@ sealed record Cli(string Root, ScanOptions Options, uint Depth, Power? Power)
         {
             throw new ArgumentException(File.Exists(Space.Literal(root)) ? $"{root} is not a directory" : $"cannot read {root}");
         }
-        return new Cli(root, options, depth, power);
+        return new Cli(root, options, depth, power, snapshot);
     }
 }
 
