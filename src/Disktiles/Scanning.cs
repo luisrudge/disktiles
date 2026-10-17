@@ -17,6 +17,9 @@ static class Scanning
     public static ScanProgress? Running { get; private set; }
     /// Paths the last scan that landed could not read.
     public static long Unreadable { get; private set; }
+    /// Each scan that lands (true) or fails (false); not one that was stopped
+    /// or replaced.
+    public static event Action<bool>? Landed;
 
     static App s_app = null!;
     static ScanPanel s_panel = null!;
@@ -104,6 +107,7 @@ static class Scanning
                 s_app.Footer.SetStatus($"scan failed · {error.Message}");
                 TestHooks.Log($"scan failed: {error.Message}");
                 landed?.Invoke(null);
+                Landed?.Invoke(false);
             }
             return;
         }
@@ -121,6 +125,7 @@ static class Scanning
         Unreadable = progress.Errors;
         s_app.State.SetTree(root, tree, volume);
         landed?.Invoke(tree);
+        Landed?.Invoke(true);
         s_app.Footer.SetStatus($"scan {HumanCount(progress.Files)} entries · {watch.Elapsed.TotalSeconds:0.0} s");
         TestHooks.Log($"landed {root}: {tree.Files} files, {tree.Dirs} dirs, {tree.Bytes} bytes, first [{string.Join(", ", tree.Children.Take(3).Select(c => $"{c.Name} {c.Bytes}B {c.Files}f"))}] in {watch.ElapsedMilliseconds} ms, rss {Environment.WorkingSet >> 20} MB, heap {GC.GetGCMemoryInfo().HeapSizeBytes >> 20} MB");
     }
