@@ -398,6 +398,22 @@ Test("windows_read_only_folders_are_removed", () =>
     Assert(!Directory.Exists(a), "removed");
 }, when: windows, onWindows: true);
 
+// The scan bounds its own workers; the thread pool belongs to the process.
+// CI runs this with DOTNET_PROCESSOR_COUNT=1 too, where a pool capped at one
+// thread hung a scan started on it.
+Test("scan_from_a_pool_thread_leaves_the_pool_alone", () =>
+{
+    var root = Empty();
+    Directory.CreateDirectory(Path.Join(root, "d", "e"));
+    File.WriteAllBytes(Path.Join(root, "d", "e", "f.bin"), new byte[100]);
+    ThreadPool.GetMaxThreads(out var workers, out var io);
+    var scan = Task.Run(() => Scanner.Scan(root, new ScanOptions { ApparentSize = true }));
+    Assert(scan.Wait(TimeSpan.FromSeconds(30)), "the scan finished");
+    Equal(100UL, scan.Result.Bytes);
+    ThreadPool.GetMaxThreads(out var workersAfter, out var ioAfter);
+    Equal((workers, io), (workersAfter, ioAfter), "the pool's limits");
+}, onWindows: true);
+
 Test("windows_following_links_visits_each_folder_once", () =>
 {
     var root = Empty();

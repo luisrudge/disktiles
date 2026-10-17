@@ -37,6 +37,11 @@ jobs:
       - run: dotnet run --project tests/FilterTests -c Release --no-build
       # Fixtures under the temp folder only; nothing outside them is removed.
       - run: dotnet run --project tests/RemovalTests -c Release --no-build
+      # Again on one core, where a scan started on the thread pool must not
+      # wait for a thread the pool never gives it.
+      - run: dotnet run --project tests/RemovalTests -c Release --no-build
+        env:
+          DOTNET_PROCESSOR_COUNT: 1
       # The single native executable: the runners carry the native toolchain.
       - run: dotnet publish src/Disktiles -c Release -o out
       - run: ls -l out && out/disktiles --version
