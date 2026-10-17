@@ -287,17 +287,25 @@ static class TestHooks
 
     /// --snapshot, in every build: once the first scan is shown, activate
     /// again (the window comes forward, no second one opens), draw the window
-    /// to `png` and quit. The release workflow runs it on each package.
+    /// to `png` and quit; a failed scan quits at once. The release workflow
+    /// runs it on each package.
     public static void SelfCheck(Gtk.Application application, App app, string png, Action<bool> done)
     {
         var started = false;
-        app.State.TreeChanged += () =>
+        Scanning.Landed += scanned =>
         {
             if (started)
             {
                 return;
             }
             started = true;
+            if (!scanned)
+            {
+                Console.Error.WriteLine($"snapshot {png}: the scan failed");
+                done(false);
+                application.Quit();
+                return;
+            }
             // A second for the window to lay the tiles out and draw them.
             GLib.Functions.TimeoutAdd(GLib.Constants.PRIORITY_DEFAULT, 1000, () =>
             {
