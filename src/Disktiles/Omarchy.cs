@@ -71,9 +71,14 @@ static class Omarchy
         });
     }
 
+    // gtk-interface-color-scheme came in GTK 4.20; older ones (Ubuntu 24.04
+    // has 4.14) only have the prefer-dark switch, and Gir.Core crashes on a
+    // property GTK does not have.
+    static readonly bool HasColorScheme = Gtk.Functions.GetMinorVersion() >= 20;
+
     static OmarchyTheme Load() => OmarchyTheme.Current(Environment.GetEnvironmentVariable("HOME"),
         // ponytail: off Omarchy, GTK's colour-scheme setting read once at each load, not followed live.
-        () => Gtk.Settings.GetDefault()?.GtkInterfaceColorScheme == Gtk.InterfaceColorScheme.Dark
+        () => (HasColorScheme && Gtk.Settings.GetDefault()?.GtkInterfaceColorScheme == Gtk.InterfaceColorScheme.Dark)
             || Gtk.Settings.GetDefault()?.GtkApplicationPreferDarkTheme == true);
 
     static void Apply(App app, Gtk.CssProvider css, OmarchyTheme theme)
@@ -81,7 +86,14 @@ static class Omarchy
         Look.Theme = theme;
         css.LoadFromString(Css(theme));
         // GTK's own widgets (scrollbars, dialogs) light or dark to match.
-        Gtk.Settings.GetDefault()?.GtkInterfaceColorScheme = theme.Dark ? Gtk.InterfaceColorScheme.Dark : Gtk.InterfaceColorScheme.Light;
+        if (HasColorScheme)
+        {
+            Gtk.Settings.GetDefault()?.GtkInterfaceColorScheme = theme.Dark ? Gtk.InterfaceColorScheme.Dark : Gtk.InterfaceColorScheme.Light;
+        }
+        else
+        {
+            Gtk.Settings.GetDefault()?.GtkApplicationPreferDarkTheme = theme.Dark;
+        }
         // Cairo-painted parts do not restyle: the treemap texture and every
         // swatch repaint once.
         app.Treemap.Render();
