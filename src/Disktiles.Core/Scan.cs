@@ -1,4 +1,5 @@
-// The scan: one task per directory on a fixed work-stealing pool, a `+1`
+// The scan: one task per directory on the work-stealing thread pool, at
+// most one listing per core (or the power preset's count) at once, a `+1`
 // sentinel per directory so it is built only once its own listing and every
 // subdirectory task are done. Hardlink dedup runs as leaves are listed and
 // each directory is aggregated as it completes (measured on an old dual-core
@@ -65,6 +66,7 @@ public sealed class ScanProgress
 
 /// One directory being walked, plus the counter that decides when it is done.
 /// It is its own thread-pool work item: queuing it allocates nothing more.
+/// WalkContext.List decides when it is listed.
 sealed class PendingDir(string path, NameRef name, PendingDir? parent, int depth, WalkContext context)
     : IThreadPoolWorkItem
 {
@@ -87,7 +89,7 @@ sealed class PendingDir(string path, NameRef name, PendingDir? parent, int depth
 
     /// List this directory and spawn a task per subdirectory (Walk queues
     /// them itself, on this worker's own deque).
-    public void Execute() => Scanner.Walk(this, _context);
+    public void Execute() => _context.List(this);
 
     /// Turn a completed directory into a node, aggregated: every child is
     /// final by now, so its totals and order are too. Only the task that took
@@ -135,52 +137,55 @@ sealed class WalkContext(ScanOptions options, ScanProgress progress) : IDisposab
 
     public bool Cancelled => Progress.IsCancelled;
 
-    // Fewer workers than the pool has threads (a power preset below the core
-    // count, which ThreadPool.SetMaxThreads refuses): directories wait on a
-    // stack, and at most `_limit` pumps on the pool list them.
-    readonly int _limit = options.Threads is { } threads && threads < Environment.ProcessorCount ? Math.Max(1, threads) : 0;
+    // The pool is the process's, not the scan's: it can run more threads than
+    // there are cores (it adds some when workers block in syscalls), and a
+    // power preset asks for fewer. So at most `_limit` directories are listed
+    // at once; one that comes up past that waits on a stack, and a lister
+    // takes it when it is done with its own.
+    readonly int _limit = Math.Max(1, options.Threads ?? Environment.ProcessorCount);
     readonly System.Collections.Concurrent.ConcurrentStack<PendingDir> _waiting = new();
-    int _pumps;
+    int _listers;
 
-    public void Queue(PendingDir dir, bool preferLocal)
+    public static void Queue(PendingDir dir, bool preferLocal) => ThreadPool.UnsafeQueueUserWorkItem(dir, preferLocal);
+
+    public void List(PendingDir dir)
     {
-        if (_limit == 0)
+        if (TryEnter())
         {
-            ThreadPool.UnsafeQueueUserWorkItem(dir, preferLocal);
-            return;
+            Scanner.Walk(dir, this);
         }
-        _waiting.Push(dir);
-        if (TryAddPump())
+        else
         {
-            ThreadPool.UnsafeQueueUserWorkItem(static context => context.Pump(), this, preferLocal: false);
+            _waiting.Push(dir);
+            // Every lister was busy, unless one left meanwhile.
+            if (!TryEnter())
+            {
+                return;
+            }
         }
+        // A lister leaving re-checks the stack after it has counted itself
+        // out, so a push that saw every lister busy is never stranded.
+        do
+        {
+            while (_waiting.TryPop(out var waiting))
+            {
+                Scanner.Walk(waiting, this);
+            }
+            Interlocked.Decrement(ref _listers);
+        }
+        while (!_waiting.IsEmpty && TryEnter());
     }
 
-    bool TryAddPump()
+    bool TryEnter()
     {
-        for (var pumps = Volatile.Read(ref _pumps); pumps < _limit; pumps = Volatile.Read(ref _pumps))
+        for (var listers = Volatile.Read(ref _listers); listers < _limit; listers = Volatile.Read(ref _listers))
         {
-            if (Interlocked.CompareExchange(ref _pumps, pumps + 1, pumps) == pumps)
+            if (Interlocked.CompareExchange(ref _listers, listers + 1, listers) == listers)
             {
                 return true;
             }
         }
         return false;
-    }
-
-    // A pump leaving re-checks the stack after it has counted itself out, so
-    // a push that saw every pump busy is never stranded.
-    void Pump()
-    {
-        do
-        {
-            while (_waiting.TryPop(out var dir))
-            {
-                dir.Execute();
-            }
-            Interlocked.Decrement(ref _pumps);
-        }
-        while (!_waiting.IsEmpty && TryAddPump());
     }
 
     public ulong? RootDeviceOf(string path)
@@ -202,27 +207,11 @@ public static class Scanner
     /// Entries counted before the shared progress counters are touched.
     const ulong TallyEvery = 1024;
 
-    static int s_poolConfigured;
-
-    /// One worker per core and no more. Without a cap the .NET pool injects
-    /// threads when workers block in syscalls; capping it keeps one listing
-    /// per core.
-    public static void ConfigurePool()
-    {
-        if (Interlocked.Exchange(ref s_poolConfigured, 1) == 0)
-        {
-            var cores = Environment.ProcessorCount;
-            ThreadPool.SetMinThreads(cores, cores);
-            ThreadPool.SetMaxThreads(cores, cores);
-        }
-    }
-
     /// Walk `root` and return the aggregated, classified tree. Blocking.
     /// `progress` is for a UI to read the counters and cancel; a cancelled
     /// scan throws OperationCanceledException instead of a partial tree.
     public static NodeRef Scan(string root, ScanOptions options, ScanProgress? progress = null)
     {
-        ConfigurePool();
         // These sets hash paths as strings, so every path the walk builds and
         // looks up starts from one spelling.
         root = Space.Normalize(root);
@@ -263,7 +252,7 @@ public static class Scanner
         }
 
         var rootDir = new PendingDir(root, context.Arena.Local.AddName(FileName(root)), null, 0, context);
-        context.Queue(rootDir, preferLocal: false);
+        WalkContext.Queue(rootDir, preferLocal: false);
         context.Done.Wait();
         if (progress.IsCancelled)
         {
@@ -399,7 +388,7 @@ public static class Scanner
         // stolen FIFO.
         for (var i = 0; i < spawned; i++)
         {
-            context.Queue(subdirs[i], preferLocal: true);
+            WalkContext.Queue(subdirs[i], preferLocal: true);
         }
         subdirs.Clear();
         SignalDone(dir, context);

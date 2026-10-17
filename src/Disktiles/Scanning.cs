@@ -81,8 +81,7 @@ static class Scanning
         try
         {
             // A thread of its own: Scan blocks until the walk is done, and on a
-            // pool thread (the pool is capped at one worker per core) it took
-            // a lister's place, or all of them on one core.
+            // pool thread it would hold one the listers could use.
             // The disk as the scan starts, so one swapped in meanwhile is
             // not taken for the one the tree shows.
             tree = await Task.Factory.StartNew(() =>
