@@ -1,0 +1,129 @@
+name: release
+
+# Push a tag such as v0.1.0: one package per platform, SHA256SUMS, a build
+# provenance attestation for each, and the install scripts, attached to a
+# GitHub release. Run by hand (workflow_dispatch), it builds the packages as
+# artifacts and releases nothing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-24.04
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+          - rid: osx-arm64
+            runner: macos-15
+          - rid: win-x64
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Actions are pinned to a commit (tags can move); Dependabot updates them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - run: dotnet build disktiles.slnx -c Release
+      - run: dotnet run --project tests/FilterTests -c Release --no-build
+      - run: dotnet run --project tests/RemovalTests -c Release --no-build
+      # A tag sets the version; otherwise Directory.Build.props has it.
+      - run: |
+          version=
+          [ "$GITHUB_REF_TYPE" = tag ] && version=-p:Version=${GITHUB_REF_NAME#v}
+          dotnet publish src/Disktiles -c Release -r ${{ matrix.rid }} $version -o out
+          out/disktiles --version
+
+      - name: Pack (Linux)
+        if: startsWith(matrix.rid, 'linux')
+        run: |
+          mkdir dist
+          cp out/disktiles packaging/disktiles.svg packaging/install.sh LICENSE README.md dist/
+          tar -czf disktiles-${{ matrix.rid }}.tar.gz -C dist .
+
+      - name: Pack (macOS)
+        if: startsWith(matrix.rid, 'osx')
+        run: |
+          mkdir dist
+          packaging/macos-bundle.sh dist out/disktiles "$(out/disktiles --version | cut -d' ' -f2)"
+          cp packaging/install.sh LICENSE README.md dist/
+          dist/disktiles.app/Contents/MacOS/disktiles --version
+          tar -czf disktiles-${{ matrix.rid }}.tar.gz -C dist .
+
+      # Windows has no GTK: MSYS2's goes into the package, next to the exe.
+      - if: startsWith(matrix.rid, 'win')
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-adwaita-icon-theme
+      - name: Bundle GTK (Windows)
+        if: startsWith(matrix.rid, 'win')
+        shell: msys2 {0}
+        run: packaging/windows-bundle.sh dist out/disktiles.exe
+      - name: Pack (Windows)
+        if: startsWith(matrix.rid, 'win')
+        shell: pwsh
+        run: |
+          Copy-Item packaging/install.ps1, LICENSE, README.md dist/
+          # The bundled exe, with no MSYS2 on PATH: what a user's machine has.
+          $env:Path = "$env:SystemRoot\system32;$env:SystemRoot"
+          $version = & dist/bin/disktiles.exe --version | Out-String
+          if ($LASTEXITCODE -or $version -notmatch '^disktiles ') { throw "the bundled exe does not run: $version" }
+          Write-Host $version
+          Compress-Archive -Path dist/* -DestinationPath disktiles-${{ matrix.rid }}.zip
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: disktiles-${{ matrix.rid }}
+          path: disktiles-${{ matrix.rid }}.*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Secrets this job may need later (signing keys) belong to this
+    # environment, which only v* tags can deploy to, never to the repository.
+    environment: release
+    permissions:
+      contents: write # create the release
+      id-token: write # sign the attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          merge-multiple: true
+      - run: cp packaging/install.sh packaging/install.ps1 . && sha256sum disktiles-* install.sh install.ps1 > SHA256SUMS
+      # gh attestation verify FILE --repo luisrudge/disktiles: built here,
+      # from this tag's commit.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            disktiles-*
+            install.sh
+            install.ps1
+      - run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes disktiles-* install.sh install.ps1 SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token, no secrets: pull requests from forks run this too.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      # Actions are pinned to a commit (tags can move); Dependabot updates them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      # Formatting (.NET's defaults); the build below also fails on any
+      # analyzer warning.
+      - run: dotnet format disktiles.slnx --verify-no-changes
+      - run: dotnet build disktiles.slnx -c Release
+      - run: dotnet run --project tests/FilterTests -c Release --no-build
+      # Fixtures under the temp folder only; nothing outside them is removed.
+      - run: dotnet run --project tests/RemovalTests -c Release --no-build
+      # The single native executable: the runners carry the native toolchain.
+      - run: dotnet publish src/Disktiles -c Release -o out
+      - run: ls -l out && out/disktiles --version
+        shell: bash

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scan, the tree, the treemap layout, filter, insights, and the
+       removal guards. No UI: the app and the tests build on it. -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="disktiles" />
+    <InternalsVisibleTo Include="FilterTests" />
+    <InternalsVisibleTo Include="RemovalTests" />
+  </ItemGroup>
+
+</Project>

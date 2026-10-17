@@ -1,0 +1,16 @@
+root = true
+
+# Formatting and code style are .NET's defaults (`dotnet format`), except
+# line endings: LF everywhere, or Windows' default (CRLF) disagrees with the
+# rest. .gitattributes checks files out the same way.
+[*]
+end_of_line = lf
+
+# The recommended analyzers that do not fit, each with its reason.
+# Disktiles.Core is the app's own library, not a published API.
+[*.cs]
+dotnet_diagnostic.CA1051.severity = none # visible fields: the arena's structs are plain data on purpose
+dotnet_diagnostic.CA1716.severity = none # names that are VB keywords (Next, Error)
+
+[tests/**.cs]
+dotnet_diagnostic.CA1861.severity = none # test data arrays, each used once

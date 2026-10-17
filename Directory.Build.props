@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The linter: .NET's recommended analyzers in every build. The few
+         exceptions, and why: .editorconfig. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

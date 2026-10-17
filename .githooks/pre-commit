@@ -1,0 +1,20 @@
+#!/bin/sh
+# Formatting, code style and analyzer fixes for the C# files being committed:
+# `dotnet format --verify-no-changes`, as CI runs it on everything.
+# Turn it on once per clone: git config core.hooksPath .githooks
+# It reads the files as they are on disk, so stage what you formatted.
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cs')
+[ -n "$files" ] || exit 0
+
+dotnet=dotnet
+[ -n "${DOTNET_ROOT:-}" ] && [ -x "$DOTNET_ROOT/dotnet" ] && dotnet=$DOTNET_ROOT/dotnet
+if ! command -v "$dotnet" >/dev/null 2>&1; then
+    echo "pre-commit: no dotnet found (PATH or DOTNET_ROOT); skipping the format check, CI still runs it" >&2
+    exit 0
+fi
+
+# shellcheck disable=SC2086 # one path per word
+if ! "$dotnet" format disktiles.slnx --verify-no-changes --include $files; then
+    echo "pre-commit: run \`dotnet format disktiles.slnx\`, then stage the result" >&2
+    exit 1
+fi

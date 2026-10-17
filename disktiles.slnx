@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Disktiles.Core/Disktiles.Core.csproj" />
+    <Project Path="src/Disktiles/Disktiles.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FilterTests/FilterTests.csproj" />
+    <Project Path="tests/RemovalTests/RemovalTests.csproj" />
+  </Folder>
+</Solution>

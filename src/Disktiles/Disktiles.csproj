@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>disktiles</AssemblyName>
+    <SelfContained>true</SelfContained>
+    <!-- dotnet publish: one native executable, ~5 MB on linux-x64. Size over
+         Speed: 0.4 MB smaller, the scan within noise. Stack traces stay
+         (0.5 MB more, but a crash log names its methods). -->
+    <PublishAot>true</PublishAot>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <!-- The stripped symbols (.dbg) stay in obj, not next to the executable. -->
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- Nor the core library's .pdb: the executable is the whole app. -->
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+    <!-- The DISKTILES_* input simulation (TestHooks.cs): debug builds, or
+         dotnet publish -p:TestHooks=true. -->
+    <DefineConstants Condition="'$(Configuration)' == 'Debug' or '$(TestHooks)' == 'true'">$(DefineConstants);TEST_HOOKS</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Windows: no console window behind the app (the version flag still
+       prints when its output is captured or piped), and the icon Explorer,
+       the taskbar and the Start menu show. -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <OutputType>WinExe</OutputType>
+    <ApplicationIcon>../../packaging/disktiles.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Disktiles.Core/Disktiles.Core.csproj" />
+    <PackageReference Include="GirCore.Gtk-4.0" Version="0.8.1" />
+  </ItemGroup>
+
+</Project>
