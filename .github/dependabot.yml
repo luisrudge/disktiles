@@ -1,7 +1,16 @@
-# Keeps the pinned action commits in the workflows current.
+# Keeps the pinned action commits in the workflows current, the NuGet
+# packages (Gir.Core) and the SDK in global.json.
 version: 2
 updates:
   - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: dotnet-sdk
     directory: /
     schedule:
       interval: monthly
