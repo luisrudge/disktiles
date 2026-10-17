@@ -10,6 +10,6 @@
     <!-- The linter: .NET's recommended analyzers in every build. The few
          exceptions, and why: .editorconfig. -->
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 </Project>
