@@ -19,11 +19,14 @@ cp "$here/disktiles.icns" "$app/Contents/Resources/disktiles.icns"
 
 cat >"$app/Contents/MacOS/disktiles" <<'EOF'
 #!/bin/sh
-# Homebrew's GTK, on Apple silicon and on Intel, then disktiles itself. Run
-# through a link (~/.local/bin/disktiles) too: the link is resolved first.
+# Homebrew's GTK, then disktiles itself. Run through a link
+# (~/.local/bin/disktiles) too: the link is resolved first.
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")
 here=$(dirname "$self")
-export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:+$DYLD_FALLBACK_LIBRARY_PATH:}/opt/homebrew/lib:/usr/local/lib:/usr/lib"
+# Wherever brew says it lives; started from Finder, brew is not on PATH, so
+# its default prefixes too (Apple silicon, then Intel).
+prefix=$(brew --prefix 2>/dev/null) || prefix=
+export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:+$DYLD_FALLBACK_LIBRARY_PATH:}${prefix:+$prefix/lib:}/opt/homebrew/lib:/usr/local/lib:/usr/lib"
 # Finder may still pass a process serial number; disktiles has no use for it.
 for argument do
     shift
