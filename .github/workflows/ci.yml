@@ -46,3 +46,38 @@ jobs:
       - run: dotnet publish src/Disktiles -c Release -o out
       - run: ls -l out && out/disktiles --version
         shell: bash
+      # Windows: the exe is a GUI program with no console of its own. Started
+      # with no output handles, as from a terminal, its version must still
+      # reach the console it was started from.
+      - if: runner.os == 'Windows'
+        shell: python
+        run: |
+          import ctypes, subprocess
+          from ctypes import wintypes
+
+          class Coord(ctypes.Structure):
+              _fields_ = [("X", wintypes.SHORT), ("Y", wintypes.SHORT)]
+
+          class BufferInfo(ctypes.Structure):
+              _fields_ = [("size", Coord), ("cursor", Coord), ("attributes", wintypes.WORD),
+                          ("window", wintypes.SMALL_RECT), ("maximum", Coord)]
+
+          kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+          kernel32.CreateFileW.restype = wintypes.HANDLE
+          kernel32.GetConsoleScreenBufferInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(BufferInfo)]
+          kernel32.ReadConsoleOutputCharacterW.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD,
+                                                           Coord, ctypes.POINTER(wintypes.DWORD)]
+
+          # STARTF_USESTDHANDLES with every handle left empty.
+          startup = subprocess.STARTUPINFO(dwFlags=subprocess.STARTF_USESTDHANDLES)
+          subprocess.run([r"out\disktiles.exe", "--version"], startupinfo=startup, check=True)
+
+          console = kernel32.CreateFileW("CONOUT$", 0xC0000000, 3, None, 3, 0, None)  # read/write, shared, existing
+          info = BufferInfo()
+          assert kernel32.GetConsoleScreenBufferInfo(console, ctypes.byref(info)), ctypes.get_last_error()
+          length = info.size.X * (info.cursor.Y + 1)
+          text, read = ctypes.create_unicode_buffer(length), wintypes.DWORD()
+          assert kernel32.ReadConsoleOutputCharacterW(console, text, length, Coord(0, 0), ctypes.byref(read))
+          shown = " ".join(text[:read.value].split())
+          assert "disktiles " in shown, f"nothing printed to the console: {shown!r}"
+          print(f"the console shows: {shown}")

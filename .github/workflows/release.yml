@@ -66,6 +66,25 @@ jobs:
           dist/disktiles.app/Contents/MacOS/disktiles --version
           tar -czf disktiles-${{ matrix.rid }}.tar.gz -C dist .
 
+      # --version returns before GTK loads. The packaged app opens its window,
+      # scans this checkout, draws the window to a PNG and quits, 1 on failure.
+      - name: Self-check (Linux)
+        if: startsWith(matrix.rid, 'linux')
+        timeout-minutes: 10
+        run: |
+          # GTK, and Xvfb for a display: the runner has neither.
+          sudo apt-get update -q
+          sudo apt-get install -yq libgtk-4-1 xvfb
+          xvfb-run -a dist/disktiles --snapshot snapshot-${{ matrix.rid }}.png .
+      - name: Self-check (macOS)
+        if: startsWith(matrix.rid, 'osx')
+        timeout-minutes: 20
+        run: |
+          brew install gtk4
+          dist/disktiles.app/Contents/MacOS/disktiles --snapshot snapshot-${{ matrix.rid }}.png .
+          # As Finder starts it: brew not on PATH.
+          env -i HOME="$HOME" PATH=/usr/bin:/bin dist/disktiles.app/Contents/MacOS/disktiles --snapshot snapshot-${{ matrix.rid }}-finder.png .
+
       # Windows has no GTK: MSYS2's goes into the package, next to the exe.
       - if: startsWith(matrix.rid, 'win')
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
@@ -81,6 +100,7 @@ jobs:
       - name: Pack (Windows)
         if: startsWith(matrix.rid, 'win')
         shell: pwsh
+        timeout-minutes: 10
         run: |
           Copy-Item packaging/install.ps1, LICENSE, README.md dist/
           # The bundled exe, with no MSYS2 on PATH: what a user's machine has.
@@ -88,12 +108,22 @@ jobs:
           $version = & dist/bin/disktiles.exe --version | Out-String
           if ($LASTEXITCODE -or $version -notmatch '^disktiles ') { throw "the bundled exe does not run: $version" }
           Write-Host $version
+          # The self-check (see Linux, macOS above), with the bundled GTK alone.
+          $check = Start-Process dist/bin/disktiles.exe -ArgumentList '--snapshot', 'snapshot-${{ matrix.rid }}.png', '.' `
+            -NoNewWindow -Wait -PassThru -RedirectStandardError snapshot.log
+          Get-Content snapshot.log
+          if ($check.ExitCode -or -not (Test-Path snapshot-${{ matrix.rid }}.png)) { throw "the bundled app does not draw" }
           Compress-Archive -Path dist/* -DestinationPath disktiles-${{ matrix.rid }}.zip
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: disktiles-${{ matrix.rid }}
           path: disktiles-${{ matrix.rid }}.*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: snapshot-${{ matrix.rid }}
+          path: snapshot-${{ matrix.rid }}*.png
           if-no-files-found: error
 
   release:

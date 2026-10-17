@@ -18,8 +18,8 @@
     <DefineConstants Condition="'$(Configuration)' == 'Debug' or '$(TestHooks)' == 'true'">$(DefineConstants);TEST_HOOKS</DefineConstants>
   </PropertyGroup>
 
-  <!-- Windows: no console window behind the app (the version flag still
-       prints when its output is captured or piped), and the icon Explorer,
+  <!-- Windows: no console window behind the app (started from a terminal,
+       it prints there: Program.cs attaches to that console), and the icon Explorer,
        the taskbar and the Start menu show. -->
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <OutputType>WinExe</OutputType>
