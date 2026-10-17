@@ -7,7 +7,9 @@ Mark what should go, review the list, and move it to the trash. Built for
 [Omarchy](https://omarchy.org): it follows your Omarchy theme and fits in with
 Hyprland. It runs on any Linux with GTK 4, on macOS and on Windows.
 
-- One native executable, about 5 MB. It uses the GTK 4 already on your system.
+- One native executable, about 5 MB on Linux and macOS, where it uses the
+  GTK 4 already on your system. On Windows it brings its own GTK: a 30 MB
+  download, about 70 MB installed.
 - Scans 250k files in about a second on an old dual-core laptop.
 - Shows which folders are worth a look first (`node_modules`, caches,
   build output), which ones git tracks, and how much free space you'd have
@@ -76,8 +78,9 @@ gh attestation verify disktiles-linux-x64.tar.gz --repo luisrudge/disktiles
 ```
 
 The builds are not signed yet. Downloaded in a browser, macOS stops the app the
-first time: open it from Finder with right-click, Open. Windows SmartScreen may
-warn too: More info, Run anyway. The install scripts avoid both, but with
+first time: open it once, then in System Settings > Privacy & Security, click
+Open Anyway next to the message about disktiles. Windows SmartScreen may warn
+too: More info, Run anyway. The install scripts avoid both, but with
 Smart App Control on, Windows runs no unsigned app.
 
 ## Use
