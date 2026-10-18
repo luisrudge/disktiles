@@ -54,15 +54,41 @@ OMASHARP001) with clear messages.
   Omarchy), and print "window is WxH, larger than the WxH screen: use --size" when it doesn't fit.
   Workaround here: `--size 1600x1000`.
 
+### 5. No way to give the app environment variables
+
+- **What happened:** the app is started by the nested Hyprland (`hl.dsp.exec_cmd`), so it gets
+  the session's environment, not the caller's. `HOME=/tmp/fake sh check.sh` still ran the app
+  with the real `HOME` (the build used the fake one). I wanted a fake Omarchy state directory to
+  check a live theme switch without touching the user's theme, and the earlier port's
+  `DISKTILES_*` switches had to become `--test-*` options for the same reason.
+- **Expected:** `check.sh --env KEY=VALUE` (repeatable), or passing through `OMASHARP_SHOT_ENV_*`.
+- **Fix:** shot.sh writes `export KEY=VALUE` lines into the app's launcher script, as it already
+  does for `QT_FORCE_STDERR_LOGGING`. Workaround here: the dev build under
+  `QT_QPA_PLATFORM=offscreen` with the fake `HOME`, and the app's `--snapshot` for the picture.
+
 ## Bridge
 
-### 5. C# `Theme` has no theme name
+### 6. DrawView draws nothing but text under Qt's software renderer (fixed here)
+
+- **What happened:** with `QT_QPA_PLATFORM=offscreen` (and so with `QT_QUICK_BACKEND=software`,
+  which `check.sh --offscreen` sets, on a machine or VM without a GPU, or wherever Qt falls back
+  to software), the treemap was labels on an empty background. `drawview.cpp` puts every shape
+  in one `QSGGeometryNode` with `QSGVertexColorMaterial`, and the software scene graph doesn't
+  draw custom materials; only the `QSGTextNode`s show.
+- **Expected:** the same picture, slower.
+- **Fix (in this app's `bridge/host/drawview.cpp`):** when
+  `window()->rendererInterface()->graphicsApi() == QSGRendererInterface::Software`, paint the
+  triangles into a `QImage` with `QPainter` and show it with `createImageNode()`, under the same
+  transform node. About 30 lines; checked with an offscreen `--snapshot`. Worth a note in
+  drawing.md too: `--offscreen` text checks can't see a DrawView's shapes.
+
+### 7. C# `Theme` has no theme name
 
 - **What happened:** disktiles shows the theme's name (`current/theme.name`). `Theme` exposes
   the colours only, so the app reads that file itself.
 - **Fix:** `Theme.Name` (and `theme.name` in QML), from `current/theme.name`.
 
-### 6. `Theme.Colors` mixes the defaults into the user's theme
+### 8. `Theme.Colors` mixes the defaults into the user's theme
 
 - **What happened:** a theme without `lighter_background` gets Tokyo Night's
   `lighterBackground` from `Defaults()`, so an app can't tell what the theme defines and derive
@@ -70,6 +96,55 @@ OMASHARP001) with clear messages.
   themes that ship with Omarchy 4 define every role, so it doesn't bite today.
 - **Fix:** keep defaults only when there is no `colors.toml` at all, or expose `Theme.Has(key)`.
 
+### 9. The bridge's `Install` writes a minimal desktop entry and can't take more
+
+- **What happened:** `-t:Install` writes `Name`, `Exec`, `Icon`, `StartupWMClass`, `Terminal`.
+  The GTK original's entry also has `GenericName`, `Comment`, `Exec … %f` (open a folder),
+  `Categories`, `Keywords`, `StartupNotify` and a desktop action ("Scan the whole disk",
+  `--disk`). There is no property or item to add keys, and it doesn't refresh
+  `update-desktop-database` or the icon cache.
+- **Expected:** csproj properties such as `AppComment`, `AppCategories`, `AppKeywords`,
+  `AppExecArgs` (`%f`), and an item list for actions, or a `desktop.in` template file in the app.
+- **Workaround here:** a `DiskTilesDesktopEntry` target `AfterTargets="Install"` in
+  `DiskTiles.csproj` that rewrites the entry (tested with `HOME` set to a scratch folder; it
+  passes `desktop-file-validate`). It reads the bridge's private `_Home`, which is fragile.
+- Smaller: `WriteLinesToFile` drops empty lines, so the entry can't have the blank line before
+  `[Desktop Action …]` (valid without it, but unusual).
+
+### 10. `grabToImage` of the root leaves out the window's colour
+
+- Not a bridge bug, but every app that wants a screenshot of itself (disktiles' `--snapshot`, a
+  release self-check) hits it: the PNG has a transparent background, so the header and footer
+  look black. Workaround: a `Rectangle { color: theme.background }` filling the grabbed item.
+  A line in the skill (or a `Bridge.Snapshot(path)` in the host that uses
+  `QQuickWindow::grabWindow()`) would save the next app the hour.
+
+## Skill and docs
+
+### 11. The skill steers window apps to QtQuick.Controls, which costs startup time
+
+- **What happened:** look.md says to use `Label` from QtQuick.Controls, and the template's
+  `Main.qml` is an `ApplicationWindow`. In the earlier port's measurements, importing Controls
+  and using `ApplicationWindow` cost 20–25 ms of startup in this host, and Controls'
+  BusyIndicator fade-out delayed the first frame that mattered. disktiles avoids Controls
+  (`ui/Label.qml` is a `Text` with the Omarchy font) to keep its first treemap ahead of GTK's.
+- **Fix:** say so in look.md ("for the fastest start, a plain `Window` and a `Text`-based
+  `Label`"), or ship a Controls-free `Label` in the template.
+
+### 12. What worked well
+
+- `dotnet new install` + `dotnet new omarchy-app` gave a project that built, tested and passed
+  `check.sh` (dev and `--release`) on the first try.
+- The bridge already has the earlier port's performance patches (`Bridge.Show` without a post
+  on the UI thread, the portal platform theme instead of GTK 3), so the native treemap carried
+  over unchanged.
+- The analyzers: no false positives on a 334-line `Backend`, and clear messages on purpose-made
+  mistakes. The IL/AOT analyzers on every dev build caught nothing late.
+- `check.sh` ran fine while another thread's check was running at the same time (it finds its
+  compositor by pid), and the visible-text dump made most checks a `grep`.
+
 ## Changes made to this app's copy of the bridge and skill
 
-None yet.
+| File | Change | Why |
+|---|---|---|
+| `bridge/host/drawview.cpp` | software-renderer fallback (item 6) | the treemap was empty without a GPU and in offscreen snapshots |

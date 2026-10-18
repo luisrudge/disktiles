@@ -3,6 +3,9 @@
 # Prints: label window_ms rss_kb pss_kb threads procs idle_cpu_permille wakeups_s close_ms
 # Memory, threads, CPU and wake-ups cover the whole process tree (app + any child backend).
 # BENCH_IDLE=0 skips the 10 s idle sample.
+# disktiles: a special workspace of its own per run, and the app found by its pid (the launcher
+# execs it), so another bench.sh running at the same time (another app, another thread) can
+# never be measured, closed or killed by this one, nor this one by it.
 set -u
 label=$1; shift
 # shellcheck source=tools/session.sh
@@ -14,22 +17,23 @@ pid=; launcher=
 tree() { echo "$1"; for c in $(cat "/proc/$1/task/"*/children 2>/dev/null); do tree "$c"; done; }
 cleanup() {
   [ -n "$pid" ] && for p in $(tree "$pid"); do kill -9 "$p" 2>/dev/null; done
-  rm -f "$launcher"
+  rm -f "$launcher" "$launcher.pid"
 }
 trap cleanup EXIT
 # A hidden special workspace: no monitor is added to the user's session (layout and pointer untouched).
-ws="special:omasharp-bench"
+ws="special:disktiles-bench-$$"
 launcher=$(mktemp "$tmp/launch.XXXXXX")
-{ echo '#!/bin/sh'; printf 'exec'; for a in "$@"; do printf " '%s'" "$a"; done; echo " >'$tmp/$label.log' 2>&1"; } >"$launcher"; chmod +x "$launcher"
+{ echo '#!/bin/sh'; echo "echo \$\$ > '$launcher.pid'"; printf 'exec'; for a in "$@"; do printf " '%s'" "$a"; done; echo " >'$tmp/$label.$$.log' 2>&1"; } >"$launcher"; chmod +x "$launcher"
 start=$(date +%s%N)
 hyprctl dispatch "hl.dsp.exec_cmd(\"$launcher\", { workspace = \"$ws silent\" })" >/dev/null
+addr=
 for _ in $(seq 500); do
-  pid=$(hyprctl clients -j | jq -r ".[] | select(.workspace.name==\"$ws\") | .pid" | head -1)
-  [ -n "$pid" ] && break; sleep 0.01
+  [ -n "$pid" ] || pid=$(cat "$launcher.pid" 2>/dev/null)
+  [ -n "$pid" ] && addr=$(hyprctl clients -j | jq -r --argjson p "$pid" '.[] | select(.pid == $p) | .address' | head -1)
+  [ -n "$addr" ] && break; sleep 0.01
 done
-[ -n "$pid" ] || { echo "$label no-window"; exit 1; }
+[ -n "$addr" ] || { echo "$label no-window"; exit 1; }
 win=$(( ($(date +%s%N) - start) / 1000000 ))
-addr=$(hyprctl clients -j | jq -r ".[] | select(.workspace.name==\"$ws\") | .address" | head -1)
 sleep 3
 procs=$(tree "$pid")
 rss=0; pss=0; thr=0; n=0

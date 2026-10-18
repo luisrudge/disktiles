@@ -130,7 +130,7 @@ for folder, label, wl in [("doc", "/usr/share/doc (14.8k entries)", None), ("sha
     rows.append(["layouts / paints until the first treemap", f"{f0(med(g['n_layout']))} / {f0(med(g['n_paint']))}", f"{f0(med(q['n_layout']))} / {f0(med(q['n_paint']))}", ""])
     rows.append(["CPU at first treemap (ms)", rng(g["cpu"]), rng(q["cpu"]), f0(med(q["cpu"]) - med(g["cpu"]))])
     for k, what in [("layout", "layout (Core, all passes until first treemap)"), ("vm", "view-model build"),
-                    ("notify", "transfer: encode + host parse + QML bindings"), ("paint", "paint (GTK: Cairo to texture; QML: Canvas onPaint)")]:
+                    ("notify", "transfer: encode + host parse + QML bindings"), ("paint", "paint (GTK: Cairo to texture; port: C# Drawing)")]:
         rows.append([what + " ms", rng(g["sum_" + k]) if g["sum_" + k] else "–", rng(q["sum_" + k]) if q["sum_" + k] else "–",
                      f0(med(q["sum_" + k]) - med(g["sum_" + k])) if g["sum_" + k] and q["sum_" + k] else "–"])
     table(f"Startup, {label}: ms since the process started, median (min–max); GTK n={n[0]}, QML n={n[1]}",
