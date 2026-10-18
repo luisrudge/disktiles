@@ -19,10 +19,10 @@ sealed partial class App
     string _drive = "";
     long _driveStarted;
     int _driveFrames;
+#if TEST_HOOKS
 
     void InitDrive()
     {
-#if TEST_HOOKS
         if (Environment.GetEnvironmentVariable("DISKTILES_WORKLOAD") is not { Length: > 0 } drive)
         {
             return;
@@ -51,8 +51,8 @@ sealed partial class App
                 return false;
             });
         };
-#endif
     }
+#endif
 
     static readonly Dictionary<string, (int Ms, string[] Keys)> KeyDrives = new()
     {

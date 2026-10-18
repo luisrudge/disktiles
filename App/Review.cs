@@ -371,7 +371,7 @@ sealed partial class App
         {
             var stats = new List<StatModel>
             {
-                new("removed", $"{_removed} items", "success"),
+                new("removed", $"{_removed} {(_removed == 1 ? "item" : "items")}", "success"),
                 new("bytes claimed", Look.HumanBytes(_bytes), ""),
                 new("failed", $"{_failed}", _failed > 0 ? "danger" : ""),
             };

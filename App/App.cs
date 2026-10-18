@@ -81,7 +81,9 @@ sealed partial class App
         InitTrail();
         InitMarking();
         InitHooks();
+#if TEST_HOOKS
         InitDrive();
+#endif
         Start(cli.Root);
     }
 
