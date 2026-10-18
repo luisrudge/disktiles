@@ -1,0 +1,14 @@
+gtk window_ms=466 rss_kb=91032 pss_kb=65483 threads=19 procs=1 idle_permille=0 wakeups_s=0 close_ms=78 leftover_procs=0
+qml window_ms=413 rss_kb=119728 pss_kb=61412 threads=21 procs=1 idle_permille=0 wakeups_s=3 close_ms=55 leftover_procs=0
+qml window_ms=275 rss_kb=119420 pss_kb=61159 threads=20 procs=1 idle_permille=0 wakeups_s=3 close_ms=58 leftover_procs=0
+gtk window_ms=374 rss_kb=91224 pss_kb=65677 threads=20 procs=1 idle_permille=0 wakeups_s=0 close_ms=41 leftover_procs=0
+gtk window_ms=304 rss_kb=91232 pss_kb=65781 threads=19 procs=1 idle_permille=0 wakeups_s=0 close_ms=42 leftover_procs=0
+qml window_ms=479 rss_kb=119720 pss_kb=61458 threads=20 procs=1 idle_permille=0 wakeups_s=3 close_ms=67 leftover_procs=0
+qml window_ms=365 rss_kb=119524 pss_kb=61251 threads=20 procs=1 idle_permille=0 wakeups_s=3 close_ms=53 leftover_procs=0
+gtk window_ms=329 rss_kb=91376 pss_kb=65749 threads=19 procs=1 idle_permille=0 wakeups_s=0 close_ms=47 leftover_procs=0
+gtk window_ms=398 rss_kb=91444 pss_kb=65859 threads=19 procs=1 idle_permille=0 wakeups_s=0 close_ms=31 leftover_procs=0
+qml window_ms=299 rss_kb=119552 pss_kb=61361 threads=20 procs=1 idle_permille=0 wakeups_s=3 close_ms=67 leftover_procs=0
+qml window_ms=328 rss_kb=120100 pss_kb=61696 threads=20 procs=1 idle_permille=0 wakeups_s=3 close_ms=67 leftover_procs=0
+gtk window_ms=421 rss_kb=91312 pss_kb=65756 threads=19 procs=1 idle_permille=0 wakeups_s=0 close_ms=32 leftover_procs=0
+gtk window_ms=398 rss_kb=91164 pss_kb=65778 threads=19 procs=1 idle_permille=0 wakeups_s=0 close_ms=46 leftover_procs=0
+qml window_ms=571 rss_kb=119408 pss_kb=61196 threads=20 procs=1 idle_permille=0 wakeups_s=3 close_ms=54 leftover_procs=0

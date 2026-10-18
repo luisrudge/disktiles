@@ -40,7 +40,7 @@ No omasharp analyzer (OMASHARP0xx) false positives so far: the 334-line `Backend
 clean, and a deliberate `static` property and a `Delete()` method were caught (OMASHARP003,
 OMASHARP001) with clear messages.
 
-## check.sh
+## check.sh and the benchmark tools
 
 ### 4. Every window floats and centres, so a normal-size app window is clipped
 
@@ -66,9 +66,25 @@ OMASHARP001) with clear messages.
   does for `QT_FORCE_STDERR_LOGGING`. Workaround here: the dev build under
   `QT_QPA_PLATFORM=offscreen` with the fake `HOME`, and the app's `--snapshot` for the picture.
 
+### 6. `tools/bench.sh`: parallel runs measure, close and kill each other's apps
+
+- **What happened:** `bench.sh` launches the app on `special:omasharp-bench`, then takes the
+  first window on that workspace as "the app". Another thread on this machine was benchmarking
+  omacalc with `bench.sh` at the same time. One of my runs picked up their omacalc (window in
+  18 ms, omacalc's memory), measured it, closed it, and its cleanup `kill -9`-ed it. Their runs
+  could just as well have measured my disktiles windows. Nothing in the output says so.
+- **Expected:** a benchmark that only ever touches the process it started.
+- **Fix:** a workspace per run (`special:omasharp-bench-$$`) and find the window by the pid the
+  launcher writes before it `exec`s the app (shot.sh already finds its compositor by pid). This
+  repo's `bench/bench.sh` has that change. Also worth printing the app's class next to each
+  result, so a wrong match is visible.
+- Related: interleaving makes the comparison fair, but other work on the machine still inflates
+  both apps' times; a load-average column (as `bench/run-all.sh` logs) would make a noisy run
+  obvious.
+
 ## Bridge
 
-### 6. DrawView draws nothing but text under Qt's software renderer (fixed here)
+### 7. DrawView draws nothing but text under Qt's software renderer (fixed here)
 
 - **What happened:** with `QT_QPA_PLATFORM=offscreen` (and so with `QT_QUICK_BACKEND=software`,
   which `check.sh --offscreen` sets, on a machine or VM without a GPU, or wherever Qt falls back
@@ -82,13 +98,13 @@ OMASHARP001) with clear messages.
   transform node. About 30 lines; checked with an offscreen `--snapshot`. Worth a note in
   drawing.md too: `--offscreen` text checks can't see a DrawView's shapes.
 
-### 7. C# `Theme` has no theme name
+### 8. C# `Theme` has no theme name
 
 - **What happened:** disktiles shows the theme's name (`current/theme.name`). `Theme` exposes
   the colours only, so the app reads that file itself.
 - **Fix:** `Theme.Name` (and `theme.name` in QML), from `current/theme.name`.
 
-### 8. `Theme.Colors` mixes the defaults into the user's theme
+### 9. `Theme.Colors` mixes the defaults into the user's theme
 
 - **What happened:** a theme without `lighter_background` gets Tokyo Night's
   `lighterBackground` from `Defaults()`, so an app can't tell what the theme defines and derive
@@ -96,7 +112,7 @@ OMASHARP001) with clear messages.
   themes that ship with Omarchy 4 define every role, so it doesn't bite today.
 - **Fix:** keep defaults only when there is no `colors.toml` at all, or expose `Theme.Has(key)`.
 
-### 9. The bridge's `Install` writes a minimal desktop entry and can't take more
+### 10. The bridge's `Install` writes a minimal desktop entry and can't take more
 
 - **What happened:** `-t:Install` writes `Name`, `Exec`, `Icon`, `StartupWMClass`, `Terminal`.
   The GTK original's entry also has `GenericName`, `Comment`, `Exec … %f` (open a folder),
@@ -111,7 +127,7 @@ OMASHARP001) with clear messages.
 - Smaller: `WriteLinesToFile` drops empty lines, so the entry can't have the blank line before
   `[Desktop Action …]` (valid without it, but unusual).
 
-### 10. `grabToImage` of the root leaves out the window's colour
+### 11. `grabToImage` of the root leaves out the window's colour
 
 - Not a bridge bug, but every app that wants a screenshot of itself (disktiles' `--snapshot`, a
   release self-check) hits it: the PNG has a transparent background, so the header and footer
@@ -121,7 +137,7 @@ OMASHARP001) with clear messages.
 
 ## Skill and docs
 
-### 11. The skill steers window apps to QtQuick.Controls, which costs startup time
+### 12. The skill steers window apps to QtQuick.Controls, which costs startup time
 
 - **What happened:** look.md says to use `Label` from QtQuick.Controls, and the template's
   `Main.qml` is an `ApplicationWindow`. In the earlier port's measurements, importing Controls
@@ -131,7 +147,7 @@ OMASHARP001) with clear messages.
 - **Fix:** say so in look.md ("for the fastest start, a plain `Window` and a `Text`-based
   `Label`"), or ship a Controls-free `Label` in the template.
 
-### 12. What worked well
+### 13. What worked well
 
 - `dotnet new install` + `dotnet new omarchy-app` gave a project that built, tested and passed
   `check.sh` (dev and `--release`) on the first try.
@@ -147,4 +163,5 @@ OMASHARP001) with clear messages.
 
 | File | Change | Why |
 |---|---|---|
-| `bridge/host/drawview.cpp` | software-renderer fallback (item 6) | the treemap was empty without a GPU and in offscreen snapshots |
+| `bridge/host/drawview.cpp` | software-renderer fallback (item 7) | the treemap was empty without a GPU and in offscreen snapshots |
+| `bench/bench.sh` (copy of `tools/bench.sh`) | a workspace per run, the app found by pid (item 6) | parallel benchmarks killed each other's apps |
