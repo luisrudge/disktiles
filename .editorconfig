@@ -9,3 +9,12 @@ end_of_line = lf
 # Declare types in namespaces: an app is one executable, and the backend lives in the global
 # namespace (BackendType defaults to Backend).
 dotnet_diagnostic.CA1050.severity = none
+# Visible fields: the core's arena structs (Tree.cs, Listing.cs, Filter.cs) are plain data on
+# purpose, as in the GTK original.
+dotnet_diagnostic.CA1051.severity = none
+# Names that are VB keywords (Next, Error): this app is C# only.
+dotnet_diagnostic.CA1716.severity = none
+
+[tests/**.cs]
+# Test data arrays, each used once.
+dotnet_diagnostic.CA1861.severity = none

@@ -6,9 +6,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RollForward>LatestMajor</RollForward>
+    <!-- The core reads directories with getdents64 and statx (Core/Linux.cs). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The test hooks (App/Hooks.cs): the tests drive the app through them. -->
+    <DefineConstants>$(DefineConstants);TEST_HOOKS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <!-- The app's C# plus the bridge (its window/panel transports compile away here). Add your other .cs files. -->
-    <Compile Include="../Backend.cs;../bridge/cs/*.cs" />
+    <Compile Include="../Backend.cs;../App/*.cs;../Core/*.cs;../bridge/cs/*.cs" />
   </ItemGroup>
 </Project>
