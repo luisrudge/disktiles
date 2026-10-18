@@ -271,7 +271,7 @@ sealed partial class App
     }
 
     public TotalsModel Totals => State.Tree is { } tree
-        ? new(Look.HumanBytes(tree.Bytes), $"· {Look.HumanCount(tree.Files)} files · {Look.HumanCount(tree.Dirs)} dirs",
+        ? new(Look.HumanBytes(tree.Bytes), $"· {Look.Counted(tree.Files, "file")} · {Look.Counted(tree.Dirs, "dir")}",
             Unreadable > 0 ? $"· {Look.HumanCount(Unreadable)} unreadable" : "")
         : new("", "", "");
 }

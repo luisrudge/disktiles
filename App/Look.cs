@@ -147,6 +147,9 @@ static class Look
     /// The scan's progress counters are signed.
     public static string HumanCount(long count) => HumanCount((ulong)Math.Max(count, 0));
 
+    /// `1 file`, `12 files`, `1.4k files`.
+    public static string Counted(ulong count, string noun) => $"{HumanCount(count)} {noun}{(count == 1 ? "" : "s")}";
+
     /// `1.4 GiB`, `523 MiB`, `12 B`.
     public static string HumanBytes(ulong bytes) => Size.HumanBytes(bytes);
 

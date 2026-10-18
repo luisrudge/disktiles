@@ -399,7 +399,7 @@ sealed partial class App
                     direct += child.Bytes;
                 }
             }
-            var facts = $"{Look.HumanCount(node.Files)} files · {Look.HumanCount(node.Dirs - (node.IsDir ? 1u : 0u))} dirs · {Look.HumanBytes(direct)} direct";
+            var facts = $"{Look.Counted(node.Files, "file")} · {Look.Counted(node.Dirs - (node.IsDir ? 1u : 0u), "dir")} · {Look.HumanBytes(direct)} direct";
             var path = State.PathOf(tile.Crumbs);
             string?[] badges = [node.Name.StartsWith('.') ? "Hidden" : null, Badge(path)];
             var hint = node.IsDir ? "space mark · enter open" : "space mark";

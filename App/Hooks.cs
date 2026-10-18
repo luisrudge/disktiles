@@ -9,7 +9,8 @@
 //   --test-ctrlclick x,y    a ctrl-click: marks the tile there; ";" between several
 //   --test-scroll x,y,dy[,shift][,N]  a scroll step of dy notches, N times; ";" for more
 //   --test-crumb n[,menu]   press the n-th crumb of the trail (from 0), or its ▾
-//   --test-keys "k k …"     key presses through the keymap: "Down Down Return ctrl+o"
+//   --test-keys "k k …"     key presses through the keymap: "Down Down Return ctrl+o";
+//                           crumb=N and menu=N among them press a crumb or open its ▾
 //   --test-pick /path       ctrl+o takes this folder instead of opening a chooser
 //   --test-reveal dry       log what `o` would show instead of opening the file manager
 //   --test-save-to file     the review's `s` writes here instead of asking where
@@ -143,6 +144,13 @@ sealed partial class App
         }
         foreach (var chord in Hook("keys")?.Split([' ', ':'], StringSplitOptions.RemoveEmptyEntries) ?? [])
         {
+            // crumb=N and menu=N among the keys: press a crumb, or open its ▾, after the keys before it.
+            if (chord.Split('=') is [var verb and ("crumb" or "menu"), var n] && int.TryParse(n, out var index))
+            {
+                steps.Enqueue(($"{verb} {index}", () =>
+                    Console.Error.WriteLine($"test: {verb} {index} -> {(verb == "menu" ? CrumbMenu(index) : Crumb(index))}")));
+                continue;
+            }
             steps.Enqueue(($"key {chord}", () =>
             {
                 var handled = Press(QtKeys.Parse(chord));
