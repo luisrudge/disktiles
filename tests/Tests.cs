@@ -280,7 +280,7 @@ void AppTests()
     Key("Return");
     Key("Return");
     ui.Until(() => app.State.Screen == Screen.Done);
-    Check("permanent: Enter in the dialog deletes", !Directory.Exists(Path.Join(root, "Downloads")) && app.DoneScreen.Stats[0].Value == "1 items");
+    Check("permanent: Enter in the dialog deletes", !Directory.Exists(Path.Join(root, "Downloads")) && app.DoneScreen.Stats[0].Value == "1 item");
     Land();
     Key("Return");
 
