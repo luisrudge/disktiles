@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- window: Main.qml in a native window. panel: plugin/Panel.qml inside omarchy-shell. -->
+    <OmarchyKind>window</OmarchyKind>
+    <!-- The Wayland app_id (window rules match on it) or the shell plugin id. -->
+    <AppId>disktiles-omasharp</AppId>
+    <AppName>DiskTiles</AppName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+  </ItemGroup>
+  <!-- The bridge: copied into this app, yours to read and change. See bridge/README.md. -->
+  <Import Project="bridge/Omasharp.targets" />
+</Project>

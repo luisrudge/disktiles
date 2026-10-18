@@ -1,0 +1,11 @@
+root = true
+
+[*]
+end_of_line = lf
+
+# Analyzer exceptions, one per line, each with its reason. Warnings fail the build (Omasharp.targets);
+# turn a rule off here only when it's wrong for this app, never to make a build pass.
+[*.cs]
+# Declare types in namespaces: an app is one executable, and the backend lives in the global
+# namespace (BackendType defaults to Backend).
+dotnet_diagnostic.CA1050.severity = none

@@ -1,0 +1,281 @@
+<!-- omasharp bridge build glue. Import from the app's .csproj after setting:
+       OmarchyKind  window (in-process bridge, libapp.so) | panel (stdio child process)
+       AppId        Wayland app_id / plugin id (default: lowercase project name)
+       BackendType  the class exposed to QML as `backend` (default: Backend) -->
+<Project>
+  <PropertyGroup>
+    <OmarchyKind Condition="'$(OmarchyKind)' == ''">window</OmarchyKind>
+    <AppId Condition="'$(AppId)' == ''">$(AssemblyName.ToLowerInvariant())</AppId>
+    <BackendType Condition="'$(BackendType)' == ''">Backend</BackendType>
+    <OmasharpDir>$(MSBuildThisFileDirectory)</OmasharpDir>
+    <_Home>$([System.Environment]::GetEnvironmentVariable('HOME'))</_Home>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <!-- Lint: warnings fail the build, with .NET's recommended analyzers, the native AOT ones and
+       omasharp's own (Omasharp.Analyzers, OMASHARP001...: names QML can't take, members it can't
+       see, setters that don't tell QML, ...). Exceptions, each with its reason, go in .editorconfig.
+       The app's .csproj can turn them down: OmasharpWarningsAsErrors=false (warnings stay warnings),
+       AnalysisLevel, EnableAotAnalyzer/EnableTrimAnalyzer, OmasharpAnalyzers=false (no omasharp rules, and
+       then CA1822 asks to make backend members static: QML would lose them). -->
+  <PropertyGroup>
+    <!-- Own switch: the SDK has already set TreatWarningsAsErrors=false by the time this runs. -->
+    <TreatWarningsAsErrors Condition="'$(OmasharpWarningsAsErrors)' != 'false'">true</TreatWarningsAsErrors>
+    <AnalysisLevel Condition="'$(AnalysisLevel)' == ''">10.0-recommended</AnalysisLevel>
+    <!-- Native AOT problems (IL2xxx/IL3xxx) on every build, dev ones too, not only at publish. -->
+    <EnableAotAnalyzer Condition="'$(EnableAotAnalyzer)' == ''">true</EnableAotAnalyzer>
+    <EnableTrimAnalyzer Condition="'$(EnableTrimAnalyzer)' == ''">true</EnableTrimAnalyzer>
+    <OmasharpVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</OmasharpVersion>
+    <OmasharpAnalyzersVersion Condition="'$(OmasharpAnalyzersVersion)' == ''">$(OmasharpVersion)</OmasharpAnalyzersVersion>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(OmasharpAnalyzers)' != 'false'">
+    <!-- Lets the analyzers find the backend class when it doesn't derive from BackendBase. -->
+    <CompilerVisibleProperty Include="BackendType" />
+    <PackageReference Include="Omasharp.Analyzers" Version="$(OmasharpAnalyzersVersion)" PrivateAssets="all" Condition="'$(OmasharpAnalyzersProject)' == ''" />
+    <!-- omasharp's own repo: its examples use the analyzers from source. -->
+    <ProjectReference Include="$(OmasharpAnalyzersProject)" Condition="'$(OmasharpAnalyzersProject)' != ''"
+      OutputItemType="Analyzer" ReferenceOutputAssembly="false" Private="false"
+      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishAot;OmarchyKind" />
+  </ItemGroup>
+
+  <!-- Faster native AOT builds: no DWARF (managed stack traces still work), strip at link
+       time instead of an objcopy pass, and link with lld when it's installed.
+       Measured on a small app: native link 630 ms -> 75 ms, ILC about -0.2 s. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <NativeDebugSymbols>false</NativeDebugSymbols>
+    <StripSymbols>false</StripSymbols>
+    <LinkerFlavor Condition="Exists('/usr/bin/ld.lld')">lld</LinkerFlavor>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <LinkerArg Include="-s" />
+  </ItemGroup>
+
+  <!-- Dev builds run on whatever .NET runtime the SDK has. Window apps turn startup hooks
+       back on (PublishAot turns them off) so `dotnet watch` can hot-reload C#. Panels don't:
+       their backend is a grandchild that the harness respawns on QML reloads, which hot
+       reload can't follow, so C# edits restart the harness instead (about 3 s). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <RollForward>LatestMajor</RollForward>
+    <StartupHookSupport Condition="'$(OmarchyKind)' == 'window'">true</StartupHookSupport>
+    <DefineConstants>$(DefineConstants);OMASHARP_DEV</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OmarchyKind)' == 'panel'">
+    <OutputType>Exe</OutputType>
+    <DefineConstants>$(DefineConstants);OMASHARP_STDIO</DefineConstants>
+    <!-- The shell plugin folder: publish puts the binary in its bin/ and writes its Backend.qml. -->
+    <PluginDir Condition="'$(PluginDir)' == ''">$(MSBuildProjectDirectory)/plugin/</PluginDir>
+    <PublishDir>$(PluginDir)bin/</PublishDir>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- Dev mode: the panel runs in its own Quickshell (not in omarchy-shell), backend on JIT. -->
+    <_PanelDev>$(MSBuildProjectDirectory)/obj/panel-dev</_PanelDev>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(OmarchyKind)' == 'window'">
+    <OutputType>Library</OutputType>
+    <!-- Release: the native AOT library is lib<AppId>.so, which the host <AppId> loads. -->
+    <TargetName Condition="'$(Configuration)' == 'Release'">lib$(AppId)</TargetName>
+    <!-- Debug = dev mode: a managed Main run by the host through hostfxr (dotnet run / dotnet watch). -->
+    <OutputType Condition="'$(Configuration)' == 'Debug'">Exe</OutputType>
+    <UseAppHost Condition="'$(Configuration)' == 'Debug'">false</UseAppHost>
+    <NativeLib>Shared</NativeLib>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>$(DefineConstants);OMASHARP_NATIVE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OmarchyKind)' == 'window'">
+    <!-- Packed into <AppId>.rcc: Main.qml at the root, other files at their relative paths. -->
+    <QmlResource Include="**/*.qml;fonts/**;images/**;qtquickcontrols2*.conf" Exclude="bin/**;obj/**;plugin/**;bridge/**;tests/**;$(DefaultItemExcludes)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The host reloads QML itself; dotnet watch only needs to see C#. -->
+    <None Update="**/*.qml;**/*.js" Watch="false" />
+    <!-- When bridge/ sits inside the app (the template), the default glob already has these. -->
+    <Compile Remove="$(OmasharpDir)cs/*.cs" />
+    <Compile Include="$(OmasharpDir)cs/*.cs" Link="bridge/%(Filename)%(Extension)" />
+    <Compile Include="$(IntermediateOutputPath)AppInfo.g.cs" />
+  </ItemGroup>
+
+  <!-- Keep the app's own types whole under AOT, so its classes and records can be sent to QML as
+       objects (reflection over their public properties). Rooted by path: the release assembly file
+       is lib<AppId>.dll, so its file name isn't its assembly name. -->
+  <Target Name="OmasharpRootAppAssembly" BeforeTargets="WriteIlcRspFileForCompilation">
+    <ItemGroup><TrimmerRootAssembly Include="@(IntermediateAssembly->'%(FullPath)')" /></ItemGroup>
+  </Target>
+
+  <!-- AppId names files and folders (Install removes them), so keep it to a safe shape. -->
+  <Target Name="OmasharpCheckAppId" BeforeTargets="OmasharpAppInfo">
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(AppId)', '^[a-z0-9][a-z0-9._-]*$'))"
+           Text="AppId '$(AppId)' must be lowercase letters, digits, '.', '-' or '_' (like tally or omasharp-hello)." />
+    <Error Condition="'$(_Home)' == ''" Text="HOME isn't set." />
+  </Target>
+
+  <Target Name="OmasharpAppInfo" BeforeTargets="CoreCompile">
+    <WriteLinesToFile File="$(IntermediateOutputPath)AppInfo.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true"
+      Lines="global using AppBackend = global::$(BackendType)%3B;namespace Omasharp%3B static class AppInfo { public const string Id = &quot;$(AppId)&quot;%3B public const string Name = &quot;$(AssemblyName)&quot;%3B }" />
+  </Target>
+
+  <!-- The host (C++, qmake + g++) is the same binary for every app, so it's built once per
+       machine, Qt version and host source, into ~/.cache/omasharp/host-<key>/, and copied.
+       An app's own QML, fonts and images go into <AppId>.rcc next to it. -->
+  <Target Name="OmasharpCachedHost" Condition="'$(OmarchyKind)' == 'window'">
+    <PropertyGroup>
+      <_Qmake>$(Qmake)</_Qmake>
+      <_Qmake Condition="'$(_Qmake)' == ''">qmake6</_Qmake>
+      <_Cache>$([System.Environment]::GetEnvironmentVariable('XDG_CACHE_HOME'))</_Cache>
+      <_Cache Condition="'$(_Cache)' == ''">$(_Home)/.cache</_Cache>
+    </PropertyGroup>
+    <ItemGroup><_HostSource Include="$(OmasharpDir)host/*.cpp;$(OmasharpDir)host/*.h;$(OmasharpDir)host/host.pro" /></ItemGroup>
+    <GetFileHash Files="@(_HostSource)"><Output TaskParameter="Items" ItemName="_HostSourceHash" /></GetFileHash>
+    <Exec Command="$(_Qmake) -query QT_VERSION" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_QtVersion" />
+    </Exec>
+    <PropertyGroup>
+      <_HostHashes>@(_HostSourceHash->'%(FileHash)', '')</_HostHashes>
+      <_HostKey>$([MSBuild]::StableStringHash('$(_HostHashes)$(_QtVersion)').ToString('x8'))</_HostKey>
+      <OmasharpHostDir>$(_Cache)/omasharp/host-$(_QtVersion)-$(_HostKey)/</OmasharpHostDir>
+      <OmasharpHost>$(OmasharpHostDir)omasharp-host</OmasharpHost>
+    </PropertyGroup>
+    <Message Condition="!Exists('$(OmasharpHost)')" Importance="high" Text="Building the omasharp host once for Qt $(_QtVersion) (about 7 s)..." />
+    <!-- Built in a private folder and moved into place, so parallel first builds can't collide. -->
+    <Exec Condition="!Exists('$(OmasharpHost)')" StandardOutputImportance="low"
+      Command="set -e; mkdir -p &quot;$(_Cache)/omasharp&quot;; t=%24(mktemp -d &quot;$(_Cache)/omasharp/.build.XXXXXX&quot;); cd &quot;$t&quot;; $(_Qmake) &quot;$(OmasharpDir)host/host.pro&quot; TARGET=omasharp-host DESTDIR=&quot;$t/out&quot; &amp;&amp; make -j$([System.Environment]::ProcessorCount); mkdir -p &quot;$(OmasharpHostDir)&quot;; mv -f &quot;$t/out/omasharp-host&quot; &quot;$(OmasharpHost)&quot;; rm -rf &quot;$t&quot;" />
+  </Target>
+
+  <!-- Window apps, release: <AppId> (the cached host) + lib<AppId>.so (AOT) + <AppId>.rcc. -->
+  <Target Name="OmasharpHost" AfterTargets="Publish" DependsOnTargets="OmasharpCachedHost" Condition="'$(OmarchyKind)' == 'window'">
+    <PropertyGroup>
+      <_RccDir>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)rcc/</_RccDir>
+      <_PublishFull>$([System.IO.Path]::GetFullPath('$(PublishDir)'))</_PublishFull>
+    </PropertyGroup>
+    <Exec Condition="'$(Rcc)' == ''" Command="$(_Qmake) -query QT_HOST_LIBEXECS" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_QtLibexec" />
+    </Exec>
+    <PropertyGroup><_Rcc Condition="'$(Rcc)' == ''">$(_QtLibexec)/rcc</_Rcc><_Rcc Condition="'$(Rcc)' != ''">$(Rcc)</_Rcc></PropertyGroup>
+    <ItemGroup>
+      <_QrcLine Include="&lt;file alias=&quot;%(QmlResource.Identity)&quot;&gt;$(MSBuildProjectDirectory)/%(QmlResource.Identity)&lt;/file&gt;" />
+    </ItemGroup>
+    <MakeDir Directories="$(_RccDir)" />
+    <WriteLinesToFile File="$(_RccDir)app.qrc" Overwrite="true" WriteOnlyWhenDifferent="true"
+      Lines="&lt;RCC&gt;&lt;qresource prefix=&quot;/&quot;&gt;;@(_QrcLine);&lt;/qresource&gt;&lt;/RCC&gt;" />
+    <Exec Command="&quot;$(_Rcc)&quot; --binary &quot;$(_RccDir)app.qrc&quot; -o &quot;$(_PublishFull)$(AppId).rcc&quot;" StandardOutputImportance="low" />
+    <Copy SourceFiles="$(OmasharpHost)" DestinationFiles="$(_PublishFull)$(AppId)" SkipUnchangedFiles="true" />
+    <Exec Command="chmod +x &quot;$(_PublishFull)$(AppId)&quot;" />
+    <Message Importance="high" Text="$(AssemblyName) -> $(_PublishFull)$(AppId) (+ lib$(AppId).so, $(AppId).rcc)" />
+  </Target>
+
+  <!-- dotnet run / dotnet watch in Debug: start the dev host (window) or the panel harness.
+       Set late, once TargetPath is known. -->
+  <Target Name="OmasharpRunArguments" BeforeTargets="ComputeRunArguments" DependsOnTargets="OmasharpCachedHost" Condition="'$(Configuration)' == 'Debug'">
+    <PropertyGroup Condition="'$(OmarchyKind)' == 'window'">
+      <RunCommand>$(OmasharpHost)</RunCommand>
+      <RunArguments>--dev &quot;$(TargetPath)&quot; --qml-dir &quot;$(MSBuildProjectDirectory)&quot;</RunArguments>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(OmarchyKind)' == 'panel'">
+      <RunCommand>env</RunCommand>
+      <RunArguments>OMASHARP_BACKEND_DLL=&quot;$(TargetPath)&quot; quickshell -p &quot;$(_PanelDev)&quot;</RunArguments>
+    </PropertyGroup>
+  </Target>
+
+  <!-- Dev mode: make sure the cached host exists after a Debug build (dotnet watch runs it). -->
+  <Target Name="OmasharpDevHost" AfterTargets="Build" DependsOnTargets="OmasharpCachedHost" Condition="'$(OmarchyKind)' == 'window' and '$(Configuration)' == 'Debug'" />
+
+  <Target Name="OmasharpQmlShim" AfterTargets="Publish" Condition="'$(OmarchyKind)' == 'panel'">
+    <Exec Command="&quot;$(PublishDir)$(AssemblyName)&quot; --qml-shim &quot;$(PluginDir)Backend.qml&quot;" />
+    <Message Importance="high" Text="$(AssemblyName) -> $(PluginDir) (bin/$(AssemblyName), Backend.qml)" />
+  </Target>
+
+  <!-- Panel dev mode: regenerate Backend.qml from the JIT build, and set up a standalone
+       Quickshell config that shows plugin/Panel.qml with the shell's theme (qs.Commons). -->
+  <Target Name="OmasharpPanelDev" AfterTargets="Build" Condition="'$(OmarchyKind)' == 'panel' and '$(Configuration)' == 'Debug'">
+    <PropertyGroup><_Dotnet>$(DOTNET_HOST_PATH)</_Dotnet><_Dotnet Condition="'$(_Dotnet)' == ''">dotnet</_Dotnet></PropertyGroup>
+    <Exec Command="&quot;$(_Dotnet)&quot; &quot;$(MSBuildProjectDirectory)/$(OutputPath)$(AssemblyName).dll&quot; --qml-shim &quot;$(PluginDir)Backend.qml&quot;" />
+    <CallTarget Targets="OmasharpPanelHarness" />
+  </Target>
+
+  <Target Name="OmasharpPanelHarness" Condition="'$(OmarchyKind)' == 'panel'">
+    <MakeDir Directories="$(_PanelDev)" />
+    <Exec Command="o=&quot;%24{OMARCHY_PATH:-/usr/share/omarchy}&quot; &amp;&amp; ln -sfn &quot;%24o/shell/Commons&quot; &quot;$(_PanelDev)/Commons&quot; &amp;&amp; ln -sfn &quot;%24o/shell/Ui&quot; &quot;$(_PanelDev)/Ui&quot; &amp;&amp; ln -sfn &quot;$(PluginDir.TrimEnd('/'))&quot; &quot;$(_PanelDev)/plugin&quot;" />
+    <Copy SourceFiles="$(OmasharpDir)shell/dev-shell.qml" DestinationFiles="$(_PanelDev)/shell.qml" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- The command that runs this build, for the omasharp skill's check script: one argument per
+       line in obj/omasharp/launch. `dotnet build -t:OmasharpLaunch` (dev) or
+       `dotnet publish -t:OmasharpLaunch` (the native AOT release build) builds the app first. -->
+  <PropertyGroup>
+    <_LaunchDeps Condition="'$(Configuration)' == 'Release'">Publish;OmasharpCachedHost</_LaunchDeps>
+    <_LaunchDeps Condition="'$(Configuration)' != 'Release'">Build;OmasharpCachedHost</_LaunchDeps>
+    <_LaunchDeps Condition="'$(OmarchyKind)' == 'panel'">$(_LaunchDeps);OmasharpPanelHarness</_LaunchDeps>
+  </PropertyGroup>
+  <Target Name="OmasharpLaunch" DependsOnTargets="$(_LaunchDeps)">
+    <ItemGroup Condition="'$(OmarchyKind)' == 'window' and '$(Configuration)' != 'Release'">
+      <_Launch Include="$(OmasharpHost)" /><_Launch Include="--dev" /><_Launch Include="$(TargetPath)" />
+      <_Launch Include="--qml-dir" /><_Launch Include="$(MSBuildProjectDirectory)" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(OmarchyKind)' == 'window' and '$(Configuration)' == 'Release'">
+      <_Launch Include="$([System.IO.Path]::GetFullPath('$(PublishDir)'))$(AppId)" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(OmarchyKind)' == 'panel'">
+      <_Launch Include="env" Condition="'$(Configuration)' != 'Release'" />
+      <_Launch Include="OMASHARP_BACKEND_DLL=$(TargetPath)" Condition="'$(Configuration)' != 'Release'" />
+      <_Launch Include="quickshell" /><_Launch Include="-p" /><_Launch Include="$(_PanelDev)" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/obj/omasharp/launch" Lines="@(_Launch)" Overwrite="true" />
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/obj/omasharp/kind" Lines="$(OmarchyKind)" Overwrite="true" />
+  </Target>
+
+  <!-- dotnet build -t:UpdateBridge: bring the bridge and the omasharp skill from the installed
+       omarchy-app template (see bridge/update.sh: your customizations are kept, never overwritten). -->
+  <Target Name="UpdateBridge">
+    <!-- High importance: the summary and any "is the template installed?" show at the default verbosity. -->
+    <Exec Command="sh &quot;$(OmasharpDir)update.sh&quot; &quot;$(MSBuildProjectDirectory)&quot;" StandardOutputImportance="high" StandardErrorImportance="high" />
+  </Target>
+
+  <!-- dotnet publish -t:Install   (and -t:Uninstall): put the app where Omarchy finds it. -->
+  <PropertyGroup>
+    <AppName Condition="'$(AppName)' == ''">$(AssemblyName)</AppName>
+  </PropertyGroup>
+
+  <Target Name="Install" DependsOnTargets="OmasharpCheckAppId;Publish">
+    <PropertyGroup>
+      <_LibDir>$(_Home)/.local/share/omasharp/$(AppId)</_LibDir>
+      <_PluginTarget>$(_Home)/.config/omarchy/plugins/$(AppId)</_PluginTarget>
+    </PropertyGroup>
+    <ItemGroup Condition="'$(OmarchyKind)' == 'window'">
+      <_AppFiles Include="$(PublishDir)$(AppId);$(PublishDir)lib$(AppId).so;$(PublishDir)$(AppId).rcc" />
+      <_Icon Include="icon.svg" Condition="Exists('icon.svg')" />
+      <_Icon Include="icon.png" Condition="Exists('icon.png')" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(OmarchyKind)' == 'panel'">
+      <_PluginFiles Include="$(PluginDir)**" />
+    </ItemGroup>
+    <!-- window: binary + lib in ~/.local/share/omasharp/<id>, launcher in ~/.local/bin, .desktop entry -->
+    <Copy Condition="'$(OmarchyKind)' == 'window'" SourceFiles="@(_AppFiles)" DestinationFolder="$(_LibDir)" />
+    <Exec Condition="'$(OmarchyKind)' == 'window'" Command="mkdir -p &quot;$(_Home)/.local/bin&quot; &amp;&amp; ln -sfn &quot;$(_LibDir)/$(AppId)&quot; &quot;$(_Home)/.local/bin/$(AppId)&quot;" />
+    <Copy Condition="'$(OmarchyKind)' == 'window'" SourceFiles="@(_Icon)" DestinationFiles="$(_Home)/.local/share/icons/hicolor/scalable/apps/$(AppId)%(Extension)" />
+    <WriteLinesToFile Condition="'$(OmarchyKind)' == 'window'" File="$(_Home)/.local/share/applications/$(AppId).desktop" Overwrite="true"
+      Lines="[Desktop Entry];Type=Application;Name=$(AppName);Exec=$(_LibDir)/$(AppId);Icon=$(AppId);StartupWMClass=$(AppId);Terminal=false" />
+    <!-- panel: copy the plugin folder into the shell's plugins and enable it -->
+    <Copy Condition="'$(OmarchyKind)' == 'panel'" SourceFiles="@(_PluginFiles)" DestinationFiles="@(_PluginFiles->'$(_PluginTarget)/%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Exec Condition="'$(OmarchyKind)' == 'panel'" Command="chmod +x &quot;$(_PluginTarget)/bin/$(AssemblyName)&quot; &amp;&amp; for i in 1 2 3 4 5 6 7 8 9 10; do omarchy plugin enable $(AppId) &gt;/dev/null 2&gt;&amp;1 &amp;&amp; exit 0; omarchy-shell shell rescanPlugins &gt;/dev/null 2&gt;&amp;1; sleep 0.5; done; echo 'omarchy plugin enable $(AppId) failed' &gt;&amp;2; exit 1" />
+    <Message Importance="high" Condition="'$(OmarchyKind)' == 'window'" Text="Installed $(AppId): run `$(AppId)` or pick $(AppName) in the app launcher." />
+    <Message Importance="high" Condition="'$(OmarchyKind)' == 'panel'" Text="Installed $(AppId): omarchy-shell shell toggle $(AppId)" />
+  </Target>
+
+  <Target Name="Uninstall" DependsOnTargets="OmasharpCheckAppId">
+    <Exec Condition="'$(OmarchyKind)' == 'window'" Command="rm -rf &quot;$(_Home)/.local/share/omasharp/$(AppId)&quot; &quot;$(_Home)/.local/bin/$(AppId)&quot; &quot;$(_Home)/.local/share/applications/$(AppId).desktop&quot; &quot;$(_Home)/.local/share/icons/hicolor/scalable/apps/$(AppId).svg&quot; &quot;$(_Home)/.local/share/icons/hicolor/scalable/apps/$(AppId).png&quot;; rmdir &quot;$(_Home)/.local/share/omasharp&quot; 2>/dev/null || true" />
+    <Exec Condition="'$(OmarchyKind)' == 'panel'" Command="omarchy plugin disable $(AppId); rm -rf &quot;$(_Home)/.config/omarchy/plugins/$(AppId)&quot;" />
+    <Message Importance="high" Text="Uninstalled $(AppId)" />
+  </Target>
+</Project>
