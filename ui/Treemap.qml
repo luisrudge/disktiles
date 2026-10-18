@@ -84,7 +84,13 @@ Item {
       lastAt = Qt.point(mouse.x, mouse.y);
       if (b > 0) backend.click(mouse.x, mouse.y, b, again ? 2 : 1, mouse.modifiers);
     }
-    onWheel: (wheel) => backend.scroll(wheel.x, wheel.y, -wheel.angleDelta.x / 120, -wheel.angleDelta.y / 120, wheel.modifiers)
+    // In notches, down positive. A touchpad sends pixels (Qt leaves pixelDelta empty for a
+    // wheel): 24 px make a notch, as in the GTK original's surface units.
+    onWheel: (wheel) => {
+      var px = wheel.pixelDelta.x !== 0 || wheel.pixelDelta.y !== 0;
+      backend.scroll(wheel.x, wheel.y, px ? -wheel.pixelDelta.x / 24 : -wheel.angleDelta.x / 120,
+        px ? -wheel.pixelDelta.y / 24 : -wheel.angleDelta.y / 120, wheel.modifiers);
+    }
   }
 
   // The selection's amber ring, then the hover outline, then the card.

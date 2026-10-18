@@ -14,4 +14,16 @@
   </ItemGroup>
   <!-- The bridge: copied into this app, yours to read and change. See bridge/README.md. -->
   <Import Project="bridge/Omasharp.targets" />
+
+  <!-- After the bridge's Install: the GTK original's full desktop entry (a generic name, a
+       comment, a folder argument, categories, keywords and a "Scan the whole disk" action),
+       in place of the bridge's minimal one, which takes no extra keys. -->
+  <Target Name="DiskTilesDesktopEntry" AfterTargets="Install">
+    <PropertyGroup>
+      <_Entry>$(_Home)/.local/share/applications/$(AppId).desktop</_Entry>
+      <_Exe>$(_Home)/.local/share/omasharp/$(AppId)/$(AppId)</_Exe>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_Entry)" Overwrite="true" Lines="[Desktop Entry];Type=Application;Version=1.0;Name=$(AppName);GenericName=Disk space treemap;Comment=See what is using your disk, mark what should go, remove it;Exec=&quot;$(_Exe)&quot; %25f;Icon=$(AppId);Terminal=false;Categories=System%3BFilesystem%3B;Keywords=disk%3Bspace%3Busage%3Bdu%3Btreemap%3Bcleanup%3B;StartupNotify=true;StartupWMClass=$(AppId);Actions=disk%3B;;[Desktop Action disk];Name=Scan the whole disk;Exec=&quot;$(_Exe)&quot; --disk" />
+    <Exec Command="command -v update-desktop-database >/dev/null 2>&amp;1 &amp;&amp; update-desktop-database &quot;$(_Home)/.local/share/applications&quot; 2>/dev/null; command -v gtk-update-icon-cache >/dev/null 2>&amp;1 &amp;&amp; gtk-update-icon-cache -q &quot;$(_Home)/.local/share/icons/hicolor&quot; 2>/dev/null; true" />
+  </Target>
 </Project>

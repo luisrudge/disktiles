@@ -19,15 +19,32 @@ Window {
   property bool shown: false
   /// The panel's width once dragged; 0 is its own (320 at 100%).
   property real panelWidth: 0
-  /// `f` (debug builds): frames presented in the last second.
+  /// `f` (debug builds): frames presented in the last second, and the time between them.
   property int frames: 0
-  property int fps: 0
+  property real lastSwap: 0
+  property real intervalSum: 0
+  property real intervalMax: 0
+  property string fpsLine: ""
   onFrameSwapped: {
     frames++;
+    if (backend.fpsShown) {
+      var now = Date.now();
+      if (lastSwap > 0) { intervalSum += now - lastSwap; intervalMax = Math.max(intervalMax, now - lastSwap); }
+      lastSwap = now;
+    }
     if (backend.perfOn) backend.perfFrame();
     if (!shown) { shown = true; backend.firstFrame(); }
   }
-  Timer { interval: 1000; repeat: true; running: backend.fpsShown; onTriggered: { win.fps = win.frames; win.frames = 0; } }
+  // Qt renders on its own thread, so this shows the interval between presented frames where
+  // the GTK original showed each frame's CPU time.
+  Timer {
+    interval: 1000; repeat: true; running: backend.fpsShown
+    onTriggered: {
+      win.fpsLine = win.frames + " fps" + (win.frames > 1 ? " · interval " + (win.intervalSum / (win.frames - 1)).toFixed(1)
+        + " ms · max " + win.intervalMax.toFixed(1) + " ms" : "");
+      win.frames = 0; win.intervalSum = 0; win.intervalMax = 0; win.lastSwap = 0;
+    }
+  }
 
   // The palette is derived in C# from the bridge's Theme, which follows Omarchy switches itself.
   // Off Omarchy it follows the system's colour scheme, which only Qt knows.
@@ -231,7 +248,7 @@ Window {
     Label {
       id: fpsText
       x: 6; y: 6
-      text: win.fps + " fps"
+      text: win.fpsLine.length > 0 ? win.fpsLine : "… fps"
       font.bold: true
       color: "#8cf28c"
     }

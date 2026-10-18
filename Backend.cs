@@ -2,7 +2,7 @@
 // events QML hands back (keys, the pointer, buttons). Everything here is a
 // thin pass-through; the logic is in App/ and Core/, which tests run without Qt.
 //
-//     disktiles [OPTIONS] [FOLDER]        (default: $HOME; --help lists the options)
+//     disktiles-omasharp [OPTIONS] [FOLDER]        (default: $HOME; --help lists the options)
 using Disktiles;
 using Disktiles.Core;
 using Omasharp;
@@ -30,7 +30,7 @@ sealed class Backend : BackendBase
         }
         if (args.Contains("--version") || args.Contains("-V"))
         {
-            Console.WriteLine($"disktiles {Cli.Version}");
+            Console.WriteLine($"disktiles-omasharp {Cli.Version}");
             Environment.Exit(0);
         }
         Cli cli;

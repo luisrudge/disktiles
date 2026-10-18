@@ -9,6 +9,10 @@ ColumnLayout {
   spacing: 0
   readonly property var p: backend.palette
   readonly property real zoom: backend.uiZoom
+  // Short of room (a half-width tile), the controls that have keys give way to the trail:
+  // the check boxes first (i, d), then the depth (`[` `]`).
+  readonly property bool roomForChecks: width >= 1000 * zoom
+  readonly property bool roomForDepth: width >= 760 * zoom
   /// Where each crumb is, for the sibling menu that hangs from it.
   property var crumbItems: ({})
   signal siblingsAnchor(real x, real y)
@@ -122,11 +126,12 @@ ColumnLayout {
       }
     }
 
-    Check { text: "Hidden files"; checked: backend.includeHidden; onToggled: backend.toggleHidden() }
-    Check { text: "Apparent size"; checked: backend.apparentSize; onToggled: backend.toggleApparent() }
+    Check { visible: header.roomForChecks; text: "Hidden files"; checked: backend.includeHidden; onToggled: backend.toggleHidden() }
+    Check { visible: header.roomForChecks; text: "Apparent size"; checked: backend.apparentSize; onToggled: backend.toggleApparent() }
 
     // Depth N, then − and +, framed together.
     Rectangle {
+      visible: header.roomForDepth
       implicitWidth: depthRow.implicitWidth
       implicitHeight: depthRow.implicitHeight
       color: "transparent"
