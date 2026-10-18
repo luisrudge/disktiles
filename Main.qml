@@ -93,6 +93,8 @@ Window {
     Keys.onPressed: (event) => {
       if (backend.press(event.key, event.modifiers, event.text)) event.accepted = true;
     }
+    // The window's colour, inside the item --snapshot grabs (grabToImage leaves out the window's own).
+    Rectangle { anchors.fill: parent; color: win.p.background }
 
     // The screens: the explore page, and the others built only while shown.
     Item {

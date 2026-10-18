@@ -8,8 +8,11 @@
 #include <QFontMetricsF>
 #include <QHash>
 #include <QQuickItem>
+#include <QPainter>
 #include <QQuickWindow>
 #include <QSGGeometryNode>
+#include <QSGImageNode>
+#include <QSGRendererInterface>
 #include <QSGTextNode>
 #include <QSGTransformNode>
 #include <QSGVertexColorMaterial>
@@ -252,7 +255,13 @@ protected:
                 delete child;
             }
             m_built = m_scene;
-            if (m_built && !m_built->triangles.empty()) {
+            // disktiles: Qt Quick's software renderer (no GPU, QT_QUICK_BACKEND=software, the
+            // offscreen platform) draws no QSGVertexColorMaterial, so the shapes vanished and only
+            // the text showed. There, paint the same triangles into an image instead.
+            if (m_built && !m_built->triangles.empty()
+                && window()->rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
+                root->appendChildNode(softwareNode(*m_built));
+            } else if (m_built && !m_built->triangles.empty()) {
                 auto *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_ColoredPoint2D(), int(m_built->triangles.size()));
                 geometry->setDrawingMode(QSGGeometry::DrawTriangles);
                 std::memcpy(geometry->vertexDataAsColoredPoint2D(), m_built->triangles.data(),
@@ -284,6 +293,36 @@ protected:
     }
 
 private:
+    // The shapes as one image, for the software renderer (see updatePaintNode).
+    QSGNode *softwareNode(const Scene &scene) {
+        float x0 = scene.triangles[0].x, y0 = scene.triangles[0].y, x1 = x0, y1 = y0;
+        for (const auto &v : scene.triangles) {
+            x0 = std::min(x0, v.x); y0 = std::min(y0, v.y);
+            x1 = std::max(x1, v.x); y1 = std::max(y1, v.y);
+        }
+        const QRectF area(std::floor(x0), std::floor(y0), std::ceil(x1) - std::floor(x0), std::ceil(y1) - std::floor(y0));
+        const qreal dpr = window()->effectiveDevicePixelRatio();
+        QImage image(QSize(qMax(1, qCeil(area.width() * dpr)), qMax(1, qCeil(area.height() * dpr))), QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::transparent);
+        QPainter painter(&image);
+        painter.scale(dpr, dpr);
+        painter.translate(-area.topLeft());
+        painter.setPen(Qt::NoPen);
+        for (size_t i = 0; i + 2 < scene.triangles.size(); i += 3) {
+            const auto &a = scene.triangles[i], &b = scene.triangles[i + 1], &c = scene.triangles[i + 2];
+            // Every vertex of a shape has its colour, premultiplied (see vertex()).
+            painter.setBrush(QColor::fromRgba(qUnpremultiply(qRgba(a.r, a.g, a.b, a.a))));
+            const QPointF points[3] = {{a.x, a.y}, {b.x, b.y}, {c.x, c.y}};
+            painter.drawPolygon(points, 3);
+        }
+        painter.end();
+        QSGImageNode *node = window()->createImageNode();
+        node->setTexture(window()->createTextureFromImage(image));
+        node->setOwnsTexture(true);
+        node->setRect(area);
+        return node;
+    }
+
     QString m_source;
     QVariantList m_view;
     std::shared_ptr<const Scene> m_scene, m_built;
