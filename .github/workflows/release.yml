@@ -1,0 +1,43 @@
+name: Release
+
+# Push a tag that matches <Version> in the .csproj: `git tag v0.2.0 && git push origin v0.2.0`.
+# The GitHub release gets what `dotnet publish -t:Package` makes: <AppId>-linux-x64.tar.gz,
+# SHA256SUMS and install.sh. Users install (and later update) the app with
+#   curl -fsSL https://github.com/<owner>/<repo>/releases/latest/download/install.sh | sh
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # the GitHub release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # From Omarchy's stable mirror, not Arch's: the app needs the Qt it was built with or newer,
+      # so it's built with the one every up-to-date Omarchy already has.
+      - name: Install toolchain
+        run: |
+          echo 'Server = https://stable-mirror.omarchy.org/$repo/os/$arch' > /etc/pacman.d/mirrorlist
+          pacman -Syyuu --noconfirm --needed git dotnet-sdk qt6-base qt6-declarative gcc make clang lld desktop-file-utils github-cli
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Tag matches the version
+        run: |
+          v=$(dotnet msbuild -getProperty:Version)
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != v$v (<Version> in the .csproj)"; exit 1; }
+      - name: Test
+        run: if ls tests/*.csproj >/dev/null 2>&1; then dotnet run --project tests; fi
+      - name: Package
+        run: dotnet publish -t:Package
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # A tag with a suffix (v1.0.0-rc.1) is a pre-release, which releases/latest skips.
+          pre=; case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" artifacts/* --title "$GITHUB_REF_NAME" --generate-notes $pre

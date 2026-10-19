@@ -23,15 +23,33 @@ GTK 4. This one is C# (native AOT) and QML, made with the `omarchy-app` template
 The app id (and command) is `disktiles-omasharp`, so it can sit next to the original
 (`io.github.luisrudge.disktiles`, command `disktiles`).
 
+## Install
+
+On Omarchy, for your user only (no sudo, and no .NET: it's native code on the Qt Omarchy ships):
+
+```sh
+curl -fsSL https://github.com/luisrudge/disktiles-omasharp/releases/latest/download/install.sh | sh
+```
+
+Run it again to update. To remove it:
+
+```sh
+curl -fsSL https://github.com/luisrudge/disktiles-omasharp/releases/latest/download/install.sh | sh -s uninstall
+```
+
+It puts DiskTiles in the app launcher, the app in `~/.local/share/omasharp/disktiles-omasharp/`
+and the `disktiles-omasharp` command in `~/.local/bin`. The script checks the download against
+the release's `SHA256SUMS`, and stops without installing anything if your system's Qt is older
+than the one the release was built with (then update Omarchy and run it again). Releases are
+x86_64 only. Elsewhere on Arch it needs `qt6-declarative`.
+
 ## Use
 
 ```sh
-dotnet publish -t:Install            # ~/.local/share/omasharp/disktiles-omasharp, ~/.local/bin, a launcher entry
 disktiles-omasharp                   # your home folder
 disktiles-omasharp ~/projects        # a folder
 disktiles-omasharp --disk            # the whole disk
 disktiles-omasharp --help            # every option
-dotnet build -t:Uninstall
 ```
 
 Inside, `?` lists every key: arrows or `hjkl` to move, Enter to open, Backspace to go up, Space
@@ -155,7 +173,7 @@ stands here. ✅ ported and checked · ➖ there, but done differently (the note
 | Title `disktiles · ~/folder` | ✅ | Follows the scanned root |
 | 1440×900, no minimum size, every launch its own window | ✅ | |
 | Footer key hints (only bound keys) + "? all keys" + status | ✅ | |
-| Desktop entry: generic name, comment, `%f`, categories, keywords, "Scan the whole disk" action, icon | ✅ | `DiskTilesDesktopEntry` after the bridge's `Install` |
+| Desktop entry: generic name, comment, `%f`, categories, keywords, "Scan the whole disk" action, icon | ✅ | `app.desktop` (the bridge fills in the binary, the icon and `StartupWMClass`) |
 | Notifications | — | Neither app sends any |
 | macOS and Windows | — | Linux only, by design |
 | `DISKTILES_*` test switches | ➖ | `--test-*` options in debug builds (`App/Hooks.cs`), because check.sh's compositor passes no environment; `DISKTILES_LOG` and `DISKTILES_PERF`/`DISKTILES_WORKLOAD` stay variables |
@@ -251,6 +269,15 @@ The build treats warnings as errors and runs .NET's recommended analyzers and om
 
 How it's organized: `Core/` (no UI), `App/` (the controller as view models, no Qt),
 `Backend.cs` (what QML sees), `Main.qml` and `ui/` (rendering only). More in `AGENTS.md`.
+
+Install your own build the way the script does (the same files, from the same `install.sh`):
+`dotnet publish -t:Install`, and `dotnet build -t:Uninstall` to remove it.
+
+**Releasing:** set `<Version>` in `DiskTiles.csproj`, then push a tag that matches it
+(`git tag v0.2.0 && git push origin v0.2.0`). `.github/workflows/release.yml` tests the app,
+builds it on Omarchy's stable packages (so every up-to-date Omarchy can run it), and attaches
+`dotnet publish -t:Package`'s files to a GitHub release: `disktiles-omasharp-linux-x64.tar.gz`,
+`SHA256SUMS` and `install.sh`.
 
 What the template, bridge, skill and analyzers got wrong or lacked, with fixes:
 [FEEDBACK.md](FEEDBACK.md).

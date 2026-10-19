@@ -242,40 +242,81 @@
     <Exec Command="sh &quot;$(OmasharpDir)update.sh&quot; &quot;$(MSBuildProjectDirectory)&quot;" StandardOutputImportance="high" StandardErrorImportance="high" />
   </Target>
 
-  <!-- dotnet publish -t:Install   (and -t:Uninstall): put the app where Omarchy finds it. -->
+  <!-- dotnet publish -t:Package (window apps): a release users install with one command, no sudo and
+       no .NET. artifacts/ gets <AppId>-linux-x64.tar.gz, SHA256SUMS and install.sh, the files of a
+       GitHub release (.github/workflows/release.yml uploads them for a v* tag). install.sh downloads
+       from github.com/<AppRepository> (owner/repo; in GitHub Actions, the repository it runs in). -->
   <PropertyGroup>
     <AppName Condition="'$(AppName)' == ''">$(AssemblyName)</AppName>
+    <AppRepository Condition="'$(AppRepository)' == ''">$(GITHUB_REPOSITORY)</AppRepository>
+    <_Installer>$(MSBuildProjectDirectory)/obj/omasharp/install.sh</_Installer>
+    <_Stage>$(MSBuildProjectDirectory)/obj/omasharp/release/$(AppId)/</_Stage>
   </PropertyGroup>
 
-  <Target Name="Install" DependsOnTargets="OmasharpCheckAppId;Publish">
+  <!-- bridge/install.sh with this app's values (the name goes between single quotes). -->
+  <Target Name="OmasharpInstaller" DependsOnTargets="OmasharpCheckAppId">
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(_Installer)'))" />
+    <Exec EnvironmentVariables="ID=$(AppId);REPO=$(AppRepository);NAME=$(AppName)"
+      Command="awk 'function all(s, a, b,   i, r) { r = &quot;&quot;; while ((i = index(s, a)) &gt; 0) { r = r substr(s, 1, i - 1) b; s = substr(s, i + length(a)) } return r s } BEGIN { n = all(ENVIRON[&quot;NAME&quot;], &quot;\x27&quot;, &quot;\x27\\\x27\x27&quot;) } { print all(all(all($0, &quot;@APPID@&quot;, ENVIRON[&quot;ID&quot;]), &quot;@REPO@&quot;, ENVIRON[&quot;REPO&quot;]), &quot;@NAME@&quot;, n) }' &quot;$(OmasharpDir)install.sh&quot; &gt; &quot;$(_Installer)&quot;" />
+  </Target>
+
+  <!-- The release's folder, obj/omasharp/release/<AppId>/: app/ (what goes into
+       ~/.local/share/omasharp/<AppId>/), install.sh, the launcher entry (app.desktop if the app has
+       one, else a minimal one; Exec="@EXEC@" until install.sh writes the installed binary there),
+       the icon and the version. -->
+  <Target Name="OmasharpStage" DependsOnTargets="OmasharpInstaller;Publish" Condition="'$(OmarchyKind)' == 'window'">
     <PropertyGroup>
-      <_LibDir>$(_Home)/.local/share/omasharp/$(AppId)</_LibDir>
-      <_PluginTarget>$(_Home)/.config/omarchy/plugins/$(AppId)</_PluginTarget>
+      <_EntrySource>$(MSBuildProjectDirectory)/app.desktop</_EntrySource>
+      <_EntrySource Condition="!Exists('app.desktop')">$(MSBuildProjectDirectory)/obj/omasharp/minimal.desktop</_EntrySource>
     </PropertyGroup>
-    <ItemGroup Condition="'$(OmarchyKind)' == 'window'">
+    <ItemGroup>
       <_AppFiles Include="$(PublishDir)$(AppId);$(PublishDir)lib$(AppId).so;$(PublishDir)$(AppId).rcc" />
       <_Icon Include="icon.svg" Condition="Exists('icon.svg')" />
       <_Icon Include="icon.png" Condition="Exists('icon.png')" />
     </ItemGroup>
+    <RemoveDir Directories="$(_Stage)" />
+    <Copy SourceFiles="@(_AppFiles)" DestinationFolder="$(_Stage)app" />
+    <Copy SourceFiles="$(_Installer)" DestinationFolder="$(_Stage)" />
+    <Copy SourceFiles="@(_Icon)" DestinationFiles="$(_Stage)$(AppId)%(Extension)" />
+    <WriteLinesToFile File="$(_Stage)version" Lines="$(Version)" Overwrite="true" />
+    <WriteLinesToFile Condition="!Exists('app.desktop')" File="$(_EntrySource)" Overwrite="true"
+      Lines="[Desktop Entry];Type=Application;Name=$(AppName);Exec=@EXEC@;Terminal=false" />
+    <Exec StandardOutputImportance="high"
+      Command="sh &quot;$(OmasharpDir)desktop.sh&quot; &quot;$(_EntrySource)&quot; &quot;$(_Stage)$(AppId).desktop&quot; @EXEC@ $(AppId) @(_Icon->Count())" />
+    <Exec Command="chmod 755 &quot;$(_Stage)app/$(AppId)&quot; &quot;$(_Stage)install.sh&quot;" />
+  </Target>
+
+  <Target Name="Package" DependsOnTargets="OmasharpStage">
+    <Error Condition="'$(OmarchyKind)' != 'window'" Text="Package is for window apps: a panel is shared as a git repo (omarchy plugin add &lt;url&gt;)." />
+    <PropertyGroup>
+      <_Artifacts>$(MSBuildProjectDirectory)/artifacts/</_Artifacts>
+      <_Asset>$(AppId)-$(RuntimeIdentifier).tar.gz</_Asset>
+    </PropertyGroup>
+    <MakeDir Directories="$(_Artifacts)" />
+    <Exec Command="tar --owner=0 --group=0 --numeric-owner -czf &quot;$(_Artifacts)$(_Asset)&quot; -C &quot;$(_Stage)..&quot; $(AppId) &amp;&amp; cd &quot;$(_Artifacts)&quot; &amp;&amp; sha256sum $(_Asset) &gt; SHA256SUMS &amp;&amp; cp &quot;$(_Installer)&quot; install.sh" />
+    <Message Importance="high" Text="$(AppName) -> $(_Artifacts) ($(_Asset), SHA256SUMS, install.sh)" />
+    <Message Importance="high" Condition="'$(AppRepository)' == ''" Text="No AppRepository (owner/repo), so this install.sh can only install from an unpacked $(_Asset). GitHub Actions sets it; elsewhere, add &lt;AppRepository&gt; to the .csproj." />
+  </Target>
+
+  <!-- dotnet publish -t:Install   (and -t:Uninstall): put the app where Omarchy finds it. A window
+       app installs the way its users do: the release's own install.sh, from obj/omasharp/release/. -->
+  <Target Name="Install" DependsOnTargets="OmasharpCheckAppId;Publish;OmasharpStage">
+    <PropertyGroup>
+      <_PluginTarget>$(_Home)/.config/omarchy/plugins/$(AppId)</_PluginTarget>
+    </PropertyGroup>
     <ItemGroup Condition="'$(OmarchyKind)' == 'panel'">
       <_PluginFiles Include="$(PluginDir)**" />
     </ItemGroup>
-    <!-- window: binary + lib in ~/.local/share/omasharp/<id>, launcher in ~/.local/bin, .desktop entry -->
-    <Copy Condition="'$(OmarchyKind)' == 'window'" SourceFiles="@(_AppFiles)" DestinationFolder="$(_LibDir)" />
-    <Exec Condition="'$(OmarchyKind)' == 'window'" Command="mkdir -p &quot;$(_Home)/.local/bin&quot; &amp;&amp; ln -sfn &quot;$(_LibDir)/$(AppId)&quot; &quot;$(_Home)/.local/bin/$(AppId)&quot;" />
-    <Copy Condition="'$(OmarchyKind)' == 'window'" SourceFiles="@(_Icon)" DestinationFiles="$(_Home)/.local/share/icons/hicolor/scalable/apps/$(AppId)%(Extension)" />
-    <WriteLinesToFile Condition="'$(OmarchyKind)' == 'window'" File="$(_Home)/.local/share/applications/$(AppId).desktop" Overwrite="true"
-      Lines="[Desktop Entry];Type=Application;Name=$(AppName);Exec=$(_LibDir)/$(AppId);Icon=$(AppId);StartupWMClass=$(AppId);Terminal=false" />
+    <Exec Condition="'$(OmarchyKind)' == 'window'" Command="sh &quot;$(_Stage)install.sh&quot;" StandardOutputImportance="high" />
     <!-- panel: copy the plugin folder into the shell's plugins and enable it -->
     <Copy Condition="'$(OmarchyKind)' == 'panel'" SourceFiles="@(_PluginFiles)" DestinationFiles="@(_PluginFiles->'$(_PluginTarget)/%(RecursiveDir)%(Filename)%(Extension)')" />
     <Exec Condition="'$(OmarchyKind)' == 'panel'" Command="chmod +x &quot;$(_PluginTarget)/bin/$(AssemblyName)&quot; &amp;&amp; for i in 1 2 3 4 5 6 7 8 9 10; do omarchy plugin enable $(AppId) &gt;/dev/null 2&gt;&amp;1 &amp;&amp; exit 0; omarchy-shell shell rescanPlugins &gt;/dev/null 2&gt;&amp;1; sleep 0.5; done; echo 'omarchy plugin enable $(AppId) failed' &gt;&amp;2; exit 1" />
-    <Message Importance="high" Condition="'$(OmarchyKind)' == 'window'" Text="Installed $(AppId): run `$(AppId)` or pick $(AppName) in the app launcher." />
     <Message Importance="high" Condition="'$(OmarchyKind)' == 'panel'" Text="Installed $(AppId): omarchy-shell shell toggle $(AppId)" />
   </Target>
 
-  <Target Name="Uninstall" DependsOnTargets="OmasharpCheckAppId">
-    <Exec Condition="'$(OmarchyKind)' == 'window'" Command="rm -rf &quot;$(_Home)/.local/share/omasharp/$(AppId)&quot; &quot;$(_Home)/.local/bin/$(AppId)&quot; &quot;$(_Home)/.local/share/applications/$(AppId).desktop&quot; &quot;$(_Home)/.local/share/icons/hicolor/scalable/apps/$(AppId).svg&quot; &quot;$(_Home)/.local/share/icons/hicolor/scalable/apps/$(AppId).png&quot;; rmdir &quot;$(_Home)/.local/share/omasharp&quot; 2>/dev/null || true" />
+  <Target Name="Uninstall" DependsOnTargets="OmasharpCheckAppId;OmasharpInstaller">
+    <Exec Condition="'$(OmarchyKind)' == 'window'" Command="sh &quot;$(_Installer)&quot; uninstall" StandardOutputImportance="high" />
     <Exec Condition="'$(OmarchyKind)' == 'panel'" Command="omarchy plugin disable $(AppId); rm -rf &quot;$(_Home)/.config/omarchy/plugins/$(AppId)&quot;" />
-    <Message Importance="high" Text="Uninstalled $(AppId)" />
+    <Message Importance="high" Condition="'$(OmarchyKind)' == 'panel'" Text="Uninstalled $(AppId)" />
   </Target>
 </Project>

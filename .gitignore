@@ -2,3 +2,4 @@ bin/
 obj/
 plugin/bin/
 plugin/Backend.qml
+artifacts/

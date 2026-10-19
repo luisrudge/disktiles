@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=DiskTiles
+GenericName=Disk space treemap
+Comment=See what is using your disk, mark what should go, remove it
+Exec=@EXEC@ %f
+Terminal=false
+Categories=System;Filesystem;
+Keywords=disk;space;usage;du;treemap;cleanup;
+StartupNotify=true
+Actions=disk;
+
+[Desktop Action disk]
+Name=Scan the whole disk
+Exec=@EXEC@ --disk
