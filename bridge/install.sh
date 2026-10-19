@@ -32,10 +32,19 @@ refresh() {
   fi
 }
 
+# One install or uninstall of this app at a time (flock comes with util-linux).
+lock() {
+  mkdir -p "$data/omasharp"
+  command -v flock >/dev/null || return 0
+  exec 9>"$data/omasharp/.$id.lock"
+  flock -n 9 || { echo "Waiting for another install of $name to finish..."; flock 9; }
+}
+
 case ${1:-} in
 '') ;;
 uninstall)
-  rm -rf "$lib" "$entry" "$icons/scalable/apps/$id.svg" "$icons/scalable/apps/$id.png"
+  lock
+  rm -rf "$lib" "$entry" "$icons/scalable/apps/$id.svg" "$icons/scalable/apps/$id.png" "$data/omasharp/.$id.lock"
   [ -L "$bin" ] && rm -f "$bin"
   rmdir "$data/omasharp" 2>/dev/null || true
   refresh
@@ -45,9 +54,11 @@ uninstall)
 *) die "usage: install.sh [uninstall]" ;;
 esac
 
-# An unpacked release has app/ next to this script; piped from curl, there is no script file.
-from=$(dirname -- "$0")
-if [ ! -f "$from/app/lib$id.so" ]; then
+# An unpacked release has app/ next to this script. Piped from curl, $0 is the shell, not this
+# file, so it always downloads, even from inside an unpacked (maybe older) release.
+from=
+[ "${0##*/}" != install.sh ] || [ ! -f "$0" ] || from=$(dirname -- "$0")
+if [ -z "$from" ] || [ ! -f "$from/app/lib$id.so" ]; then
   [ -n "$repo" ] || die "this copy has no release to download; run the install.sh of an unpacked release"
   case $(uname -m) in
   x86_64) rid=linux-x64 ;;
@@ -79,13 +90,16 @@ if [ -n "$missing" ]; then
 fi
 
 # The new copy goes in beside the old one and then takes its place, so a running copy keeps working.
-mkdir -p "$data/omasharp" "$data/applications" "$(dirname "$bin")"
-rm -rf "$lib.new" "$lib.old"
-cp -R "$from/app" "$lib.new"
-chmod 755 "$lib.new/$id"
-[ ! -e "$lib" ] || mv "$lib" "$lib.old"
-mv "$lib.new" "$lib"
-rm -rf "$lib.old"
+# The temporary names start with a dot, which no app id does, so they're never another app's folder.
+lock
+mkdir -p "$data/applications" "$(dirname "$bin")"
+new=$data/omasharp/.$id.new old=$data/omasharp/.$id.old
+rm -rf "$new" "$old"
+cp -R "$from/app" "$new"
+chmod 755 "$new/$id"
+[ ! -e "$lib" ] || mv "$lib" "$old"
+mv "$new" "$lib"
+rm -rf "$old"
 ln -sfn "$lib/$id" "$bin"
 for ext in svg png; do
   rm -f "$icons/scalable/apps/$id.$ext"
