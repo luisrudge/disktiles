@@ -121,7 +121,7 @@ OMASHARP001) with clear messages.
   `update-desktop-database` or the icon cache.
 - **Expected:** csproj properties such as `AppComment`, `AppCategories`, `AppKeywords`,
   `AppExecArgs` (`%f`), and an item list for actions, or a `desktop.in` template file in the app.
-- **Workaround here:** a `DiskTilesDesktopEntry` target `AfterTargets="Install"` in
+- **Workaround here (until omasharp PR #2):** a `DiskTilesDesktopEntry` target `AfterTargets="Install"` in
   `DiskTiles.csproj` that rewrites the entry (tested with `HOME` set to a scratch folder; it
   passes `desktop-file-validate`). It reads the bridge's private `_Home`, which is fragile.
 - Smaller: `WriteLinesToFile` drops empty lines, so the entry can't have the blank line before
@@ -147,7 +147,18 @@ OMASHARP001) with clear messages.
 - **Fix:** say so in look.md ("for the fastest start, a plain `Window` and a `Text`-based
   `Label`"), or ship a Controls-free `Label` in the template.
 
-### 13. What worked well
+### 13. No way to share an app with people who don't build it
+
+- **What happened:** the only install the template knows is `dotnet publish -t:Install` from a
+  checkout, which needs the .NET SDK, qmake and g++. Apps for Omarchy outside its package
+  repository ship a `curl … | sh` installer instead (omairc, Omadesign, disktree), and Omarchy is
+  moving away from the AUR.
+- **Fix (omasharp PR #3, stacked on #2; this app has it):** `dotnet publish -t:Package` makes a
+  release (tarball, `SHA256SUMS`, `install.sh`), the template gets `.github/workflows/release.yml`
+  (built on Omarchy's stable mirror, since the host needs the Qt it was built with or newer), and
+  `-t:Install` runs the same `install.sh`.
+
+### 14. What worked well
 
 - `dotnet new install` + `dotnet new omarchy-app` gave a project that built, tested and passed
   `check.sh` (dev and `--release`) on the first try.
@@ -164,4 +175,5 @@ OMASHARP001) with clear messages.
 | File | Change | Why |
 |---|---|---|
 | `bridge/host/drawview.cpp` | software-renderer fallback (item 7) | the treemap was empty without a GPU and in offscreen snapshots |
+| `bridge/install.sh`, `bridge/desktop.sh`, `bridge/Omasharp.targets` | releases and the one-command install (item 13; `desktop.sh` and `app.desktop` from omasharp PR #2) | users install without building it |
 | `bench/bench.sh` (copy of `tools/bench.sh`) | a workspace per run, the app found by pid (item 6) | parallel benchmarks killed each other's apps |

@@ -22,7 +22,7 @@ if command -v desktop-file-validate >/dev/null; then
   status=0; report=$(desktop-file-validate "$new" 2>&1) || status=$?
   # Its messages name the file it checked: point them at the app's own.
   [ -z "$report" ] || printf '%s\n' "$report" | NEW=$new SRC=$src awk '{ if (index($0, ENVIRON["NEW"]) == 1) $0 = ENVIRON["SRC"] substr($0, length(ENVIRON["NEW"]) + 1); print }'
-  [ "$status" -eq 0 ] || { echo "$src: error: not a valid desktop entry (above), so it wasn't installed" >&2; exit 1; }
+  [ "$status" -eq 0 ] || { echo "$src: error: not a valid desktop entry (above)" >&2; exit 1; }
 fi
 mkdir -p "$(dirname "$out")"
 mv -f "$new" "$out"

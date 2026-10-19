@@ -287,7 +287,7 @@
   </Target>
 
   <Target Name="Package" DependsOnTargets="OmasharpStage">
-    <Error Condition="'$(OmarchyKind)' != 'window'" Text="Package is for window apps: a panel is shared as a git repo (omarchy plugin add &lt;url&gt;)." />
+    <Error Condition="'$(OmarchyKind)' != 'window'" Text="Package makes window app releases; this is a panel." />
     <PropertyGroup>
       <_Artifacts>$(MSBuildProjectDirectory)/artifacts/</_Artifacts>
       <_Asset>$(AppId)-$(RuntimeIdentifier).tar.gz</_Asset>
