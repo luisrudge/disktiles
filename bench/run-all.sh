@@ -4,7 +4,7 @@
 #      startup phases, first treemap, key -> presented, workloads.
 #   2. bench.sh (omasharp's tools/bench.sh): the plain release builds on a hidden special
 #      workspace: time to window, memory, threads, idle CPU and wake-ups, close.
-# Builds (see README.md, "Benchmark"): GTK in /tmp/claude-disktiles/orig-{plain,perf}/out,
+# Builds (see README.md): GTK in /tmp/claude-disktiles/orig-{plain,perf}/out,
 # the port in /tmp/claude-disktiles/port-{plain,perf}.
 set -u
 out=$1; here=$(cd "$(dirname "$0")" && pwd); mkdir -p "$out"
