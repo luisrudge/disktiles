@@ -158,7 +158,15 @@ OMASHARP001) with clear messages.
   (built on Omarchy's stable mirror, since the host needs the Qt it was built with or newer), and
   `-t:Install` runs the same `install.sh`.
 
-### 14. What worked well
+### 14. The release workflow doesn't start where actions must be pinned
+
+- **What happened:** the template's `release.yml` uses `actions/checkout@v5`. This app's repo
+  requires actions pinned to a full commit SHA (an Actions setting), so the `v0.3.0` tag's run
+  failed at startup ("a workflow file issue") and released nothing.
+- **Fix (here; not in the template yet):** `actions/checkout@<sha> # v7.0.1`, as the GTK app's
+  workflows had it. The template could pin it too.
+
+### 15. What worked well
 
 - `dotnet new install` + `dotnet new omarchy-app` gave a project that built, tested and passed
   `check.sh` (dev and `--release`) on the first try.
