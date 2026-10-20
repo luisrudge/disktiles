@@ -341,7 +341,13 @@ void AppTests()
     Check("cli: --disk is the disk home is on", Cli.Parse(["--disk"], Power.Balanced).Root == (Space.VolumeRootFor(Removal.HomeDir()!) ?? "/"));
     Check("cli: errors say what is wrong", Throws(() => Cli.Parse(["--depth", "9"], Power.Balanced)) == "--depth must be 1 to 6"
         && Throws(() => Cli.Parse(["--disk", root], Power.Balanced)) == "--disk and a PATH cannot be combined");
-    Check("g: the whole disk under a scratch folder is its mount", Space.VolumeRootFor(root) == "/tmp", Space.VolumeRootFor(root) ?? "null");
+    // The mount util-linux sees: /tmp on a laptop (tmpfs), / in a container.
+    using (var findmnt = Process.Start(new ProcessStartInfo("findmnt", ["-no", "TARGET", "--target", root]) { RedirectStandardOutput = true })!)
+    {
+        string mount = findmnt.StandardOutput.ReadToEnd().Trim();
+        findmnt.WaitForExit();
+        Check("g: the whole disk under a scratch folder is its mount", mount.Length > 0 && Space.VolumeRootFor(root) == mount, $"{Space.VolumeRootFor(root) ?? "null"} (findmnt: {mount})");
+    }
     var linked = Path.Join(scratch, "links");
     Directory.CreateDirectory(linked);
     Directory.CreateSymbolicLink(Path.Join(linked, "pics"), Path.Join(root, "Pictures"));
