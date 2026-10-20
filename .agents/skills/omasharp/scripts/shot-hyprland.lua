@@ -7,4 +7,4 @@ hl.config({
   xwayland = { enabled = false },
   cursor = { invisible = true }, -- keep the pointer out of screenshots
 })
-hl.window_rule({ match = { class = ".*" }, float = true, center = true })
+-- Windows tile, as on Omarchy: one window fills the screen. shot.sh adds a float rule for --float.

@@ -4,7 +4,7 @@
 
 See what is using your disk as a map of tiles, mark what should go, review the list, and move it
 to the trash. An [omasharp](https://github.com/luisrudge/omasharp) app for Omarchy: C# (native
-AOT) and QML, made with the `omarchy-app` template (`Omasharp.Templates` 0.1.1).
+AOT) and QML, made with the `omarchy-app` template (`Omasharp.Templates` 0.1.1, bridge updated to 0.1.7).
 
 Up to 0.2.0, disktiles was a GTK 4 app for Linux, macOS and Windows (the
 [v0.2.0 release](https://github.com/luisrudge/disktiles/releases/tag/v0.2.0) and the git history

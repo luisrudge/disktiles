@@ -2,8 +2,8 @@
 
 A C# + QML app for Omarchy, made with the omarchy-app template: logic in `Backend.cs`, UI in `Main.qml` (window) or `plugin/Panel.qml` (panel).
 
-- Building, checking and installing it: the omasharp skill in `.agents/skills/omasharp/`.
-- Never run `dotnet run` or `dotnet watch` as an agent: they open the app on the user's screen. Check with `sh .agents/skills/omasharp/scripts/check.sh`.
+- Building, checking, installing and releasing it: the Omasharp skill in `.agents/skills/omasharp/`.
+- Never run `dotnet run` (or `dotnet watch`) as an agent: they open the app on the user's screen. Check with `sh .agents/skills/omasharp/scripts/check.sh`.
 
 ## This app
 
@@ -14,5 +14,4 @@ disktiles rebuilt on omasharp: a treemap of what uses the disk, marking, review 
 - Checks: always pass a folder (`--args "/usr/share/doc"`): with none, the app scans `$HOME`. The window is 1440×900, so use `--size 1600x1000`. Debug builds take `--test-*` options (listed in `App/Hooks.cs`): `--test-keys "Return:menu=4"`, `--test-hover x,y`, `--test-log 1`, …
 - **Removal: only ever on a scratch tree under `/tmp/claude-disktiles/`, always with `--test-trash-dir <scratch>/trash`** (an XDG trash of its own; without it "trash" means the user's trash). Never mark real files.
 - Measuring: `bench/` (README.md, "Benchmark"). `DISKTILES_PERF=<file>` and `DISKTILES_WORKLOAD=…` need a `-p:TestHooks=true` release build.
-- `bridge/host/drawview.cpp` has a local change (software-renderer fallback, FEEDBACK.md): keep it when updating the bridge.
-- Releases: `bridge/install.sh`, `bridge/desktop.sh` and the Package/Install/Uninstall targets in `bridge/Omasharp.targets` are from omasharp 0.1.4 (PRs #2 and #3; the rest of the bridge is 0.1.1). `dotnet publish -t:Package` makes the release, `.github/workflows/release.yml` publishes it to luisrudge/disktiles for a `v<Version>` tag, and users install it with the `curl … | sh` in README.md. Test `install.sh` only with a scratch `HOME` under `/tmp/claude-disktiles/` (and `OMASHARP_RELEASE_URL=file://…`).
+- The bridge and skill are Omasharp 0.1.7, unchanged; `.github/workflows/release.yml` pins `actions/checkout` to a SHA (this repo requires it). Releases: `dotnet publish -t:Package` makes the release, `.github/workflows/release.yml` publishes it to luisrudge/disktiles for a `v<Version>` tag, and users install it with the `curl … | sh` in README.md. Test `install.sh` only with a scratch `HOME` under `/tmp/claude-disktiles/` (and `OMASHARP_RELEASE_URL=file://…`).

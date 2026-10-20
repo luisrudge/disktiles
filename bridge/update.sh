@@ -1,5 +1,5 @@
 #!/bin/sh
-# update.sh [APP_DIR]: bring the bridge (bridge/) and the omasharp skill (.agents/skills/omasharp/)
+# update.sh [APP_DIR]: bring the bridge (bridge/) and the Omasharp skill (.agents/skills/omasharp/)
 # from the installed omarchy-app template into an app (shadcn-style: they're plain files you own).
 # `dotnet build -t:UpdateBridge` runs it.
 #   - files you never changed: replaced with the new version

@@ -1,17 +1,9 @@
-// Dev mode. Two pieces the release build never uses:
-//  - runManaged: start the normal .NET runtime through hostfxr and run the app's
-//    managed Main (bridge/cs/Dev.cs), which calls back into omasharp_host_run.
-//    Running Main (rather than just fetching a function pointer) is what makes
-//    startup hooks run, and with them `dotnet watch` hot reload.
-//  - watchQml: reload the window when a .qml file under --qml-dir is saved.
+// Dev mode, which the release build never uses: runManaged starts the normal .NET
+// runtime through hostfxr and runs the app's managed Main (bridge/cs/Dev.cs), which
+// calls back into omasharp_host_run. Running Main is the plain `dotnet App.dll` path,
+// so the app starts the way any .NET program does.
 #include <QDir>
-#include <QDateTime>
-#include <QDirIterator>
-#include <QHash>
-#include <QFileSystemWatcher>
-#include <QGuiApplication>
-#include <QQmlApplicationEngine>
-#include <QTimer>
+#include <QFile>
 #include <QVersionNumber>
 
 #include <cstdio>
@@ -84,50 +76,4 @@ int runManaged(const char *dll, const char *exe) {
     rc = run(ctx);
     close(ctx);
     return rc;
-}
-
-// The .qml/.js files under dir (not bin/ or obj/), with their modification times.
-static QHash<QString, QDateTime> qmlFiles(const QString &dir) {
-    QHash<QString, QDateTime> files;
-    QDirIterator it(dir, {QStringLiteral("*.qml"), QStringLiteral("*.js")}, QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) {
-        const QString f = it.next();
-        if (!f.contains("/bin/") && !f.contains("/obj/")) files.insert(f, it.fileInfo().lastModified());
-    }
-    return files;
-}
-
-void watchQml(QQmlApplicationEngine &engine, const QString &dir, const QUrl &url) {
-    auto *watcher = new QFileSystemWatcher(&engine);
-    auto *seen = new QHash<QString, QDateTime>(qmlFiles(dir));
-    auto watchAll = [watcher, dir, seen] {
-        watcher->addPath(dir);
-        for (const QString &f : seen->keys())
-            if (!watcher->files().contains(f)) watcher->addPath(f);
-    };
-    watchAll();
-
-    auto *debounce = new QTimer(&engine);
-    debounce->setSingleShot(true);
-    debounce->setInterval(80);
-    QObject::connect(debounce, &QTimer::timeout, &engine, [&engine, url, watchAll, seen, dir] {
-        // Only QML/JS changes matter (the folder also holds Backend.cs, obj/, ...).
-        const auto now = qmlFiles(dir);
-        if (now == *seen) return;
-        *seen = now;
-        // Editors often save by replacing the file, which drops the watch: re-add.
-        watchAll();
-        qGuiApp->setQuitOnLastWindowClosed(false);
-        for (QObject *root : engine.rootObjects()) delete root;
-        engine.clearComponentCache();
-        engine.load(url);
-        if (engine.rootObjects().isEmpty())
-            fprintf(stderr, "omasharp: QML has errors; fix and save to reload\n");
-        else {
-            qGuiApp->setQuitOnLastWindowClosed(true);
-            fprintf(stderr, "omasharp: reloaded QML\n");
-        }
-    });
-    QObject::connect(watcher, &QFileSystemWatcher::fileChanged, debounce, qOverload<>(&QTimer::start));
-    QObject::connect(watcher, &QFileSystemWatcher::directoryChanged, debounce, qOverload<>(&QTimer::start));
 }

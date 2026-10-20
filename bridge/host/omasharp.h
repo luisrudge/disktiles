@@ -2,14 +2,13 @@
 #pragma once
 
 // Bump on both sides whenever either struct changes; the host refuses a mismatched app.
-#define OMASHARP_ABI 3
+#define OMASHARP_ABI 4
 
 extern "C" {
 
 struct omasharp_host {
     void (*notify)(const char *name, const char *json);                 // UI thread only
     void (*post)(long long token);                                      // any thread; run api->run_posted(token) on the UI thread
-    void (*method)(const char *name);                                   // dev hot reload: a method appeared on Backend
     void (*raised)(const char *name, const char *json);                 // C# Raise(): QML gets backend.raised(name, value)
     const char *args;                                                   // JSON array: the app's arguments (host options removed)
     void (*draw)(const char *name, const unsigned char *data, int len); // Bridge.Show: a Drawing for DrawView

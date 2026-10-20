@@ -1,6 +1,6 @@
-// Panel dev harness (dotnet run / dotnet watch on a panel app): shows plugin/Panel.qml
+// Panel dev harness (dotnet run and check.sh on a panel app): shows plugin/Panel.qml
 // in its own Quickshell process, with omarchy-shell's theme (qs.Commons) but none of
-// its risk. Reloads when anything in plugin/ is saved. Closing the panel ends the run.
+// its risk. Closing the panel ends the run.
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -14,19 +14,7 @@ ShellRoot {
     onOpenedChanged: if (!opened) Qt.quit()
   }
 
-  // Quickshell doesn't see changes behind the plugin/ symlink, so watch it here.
-  Process {
-    running: true
-    command: ["inotifywait", "-m", "-r", "-q", "-e", "close_write,moved_to,create", "--format", "%f", Quickshell.shellDir + "/plugin/"]
-    stdout: SplitParser {
-      onRead: function(file) {
-        if (/\.(qml|js)$/.test(file)) { console.info("omasharp: reloading panel QML (" + file + ")"); reload.restart() }
-      }
-    }
-  }
-  Timer { id: reload; interval: 80; onTriggered: Quickshell.reload(false) }
-
-  // check.sh support (the omasharp skill): with OMASHARP_TEXT_DUMP=<file>, write the panel's visible texts there.
+  // check.sh support (the Omasharp skill): with OMASHARP_TEXT_DUMP=<file>, write the panel's visible texts there.
   // Same output as the window version in bridge/host/textdump.cpp; keep them in step.
   readonly property string dumpPath: Quickshell.env("OMASHARP_TEXT_DUMP") || ""
   FileView { id: dump; path: root.dumpPath; blockWrites: true }

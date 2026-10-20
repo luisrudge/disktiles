@@ -2,7 +2,8 @@
 
 ## Window apps
 
-- `theme.*` holds every key in Omarchy's `colors.toml`, camelCased: `theme.background`, `theme.foreground`, `theme.accent`, `theme.selection`, `theme.muted`, `theme.darkBackground`, `theme.red`, … plus `theme.dark`. It updates live when the user switches themes. `Main.qml` sets the Omarchy font (`monospace`) on the window, so use `Label` (from QtQuick.Controls, which inherits it) rather than `Text`. Keep the layout simple and flat, like omacalc.
+- `theme.*` holds every key in Omarchy's `colors.toml`, camelCased: `theme.background`, `theme.foreground`, `theme.accent`, `theme.selection`, `theme.muted`, `theme.darkBackground`, `theme.red`, … plus `theme.dark` and `theme.name` (the theme's name as Omarchy stores it, e.g. `tokyo-night`). It updates live when the user switches themes. `Main.qml` sets the Omarchy font (`monospace`) on the window, so use `Label` (from QtQuick.Controls, which inherits it) rather than `Text`. Keep the layout simple and flat, like omacalc.
+- `QtQuick.Controls` (`ApplicationWindow`, `Label`) costs about 10 ms of startup and 2 MB: the hello example opened its window in 190 ms as a plain `Window` with `Text`, 200 ms with Controls (PSS 42 → 44 MB; medians of 14 interleaved runs). Keep Controls, as Omarchy's own apps do, unless start time matters most; then use `Window` and `Text` with `font.family: "monospace"`.
 - Secondary text (captions, hints): `Qt.alpha(theme.foreground, 0.6)`. `theme.muted` is meant for borders and is too dim for text.
 - Surfaces: `theme.lighterBackground` (fields, buttons), `theme.selection` (pressed, selected rows), `theme.muted` (borders). Don't derive them with `Qt.lighter(theme.background, …)`: that does nothing on Omarchy's pure black and pure white themes.
 - A themed text field, with the content selected on focus so typing replaces it:
@@ -13,10 +14,11 @@
     onActiveFocusChanged: if (activeFocus) selectAll()
   }
   ```
+- `grabToImage` (an app saving a picture of itself) leaves out the window's color: grabbing the root gives a PNG that's transparent where the window shows `theme.background`. Grab an item filled with a `Rectangle { anchors.fill: parent; color: theme.background }` instead.
 
 ## Theme colors in C#
 
-For colors you compute in C# (e.g. a `Drawing`): `Theme.Color("accent")`, `Theme.Get("darkBackground")`, `Theme.Dark`, all keys in `Theme.Colors`. `Theme.Changed` fires on the UI thread when the user switches themes: redraw then. Works in panels too.
+For colors you compute in C# (e.g. a `Drawing`): `Theme.Color("accent")`, `Theme.Get("darkBackground")`, `Theme.Dark`, all keys in `Theme.Colors`, and the theme's name in `Theme.Name` (`tokyo-night`; `""` without an Omarchy theme). `Theme.Changed` fires on the UI thread when the user switches themes: redraw then. Works in panels too: the shell's colors have no theme name, so a panel that shows it exposes `Theme.Name` from the backend (`public string ThemeName => Theme.Name;`, with `Theme.Changed += () => Notify(nameof(ThemeName));` in the constructor).
 
 ## Panels
 

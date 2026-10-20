@@ -1,4 +1,4 @@
-// A picture for QML's DrawView (window apps): rectangles, outlines, hatching and text,
+// A picture for QML's DrawView (window apps): rectangles, outlines, hatching, lines, areas and text,
 // drawn natively by the host's scene graph. Build one, then Bridge.Show("name", drawing);
 // QML shows it with `DrawView { source: "name"; view: [scale, x, y] }`. Coordinates are in
 // the DrawView's pixels for the view given here; when QML's `view` later differs (zoom,
@@ -50,6 +50,26 @@ public sealed class Drawing
         B(3); F(x); F(y); F(w); F(h); F(spacing); F(thickness); U(color.Argb); _count++;
     }
 
+    /// <summary>A straight line `width` thick from (x1, y1) to (x2, y2), with square-cut ends.</summary>
+    public void Line(double x1, double y1, double x2, double y2, double width, Color color) =>
+        Polyline([(x1, y1), (x2, y2)], width, color);
+
+    /// <summary>Connected lines `width` thick through the points (a line chart). Corners are mitred,
+    /// or cut flat where they're sharper than 60°, so a steep chart gets no spikes.</summary>
+    public void Polyline(ReadOnlySpan<(double X, double Y)> points, double width, Color color)
+    {
+        if (points.Length < 2 || width <= 0 || color.A == 0) return;
+        B(5); F(width); U(color.Argb); Points(points); _count++;
+    }
+
+    /// <summary>The area between the line through the points and the level `baselineY` (an area
+    /// chart: draw it first, then a Polyline through the same points). Points go left to right.</summary>
+    public void Area(ReadOnlySpan<(double X, double Y)> points, double baselineY, Color color)
+    {
+        if (points.Length < 2 || color.A == 0) return;
+        B(6); F(baselineY); U(color.Argb); Points(points); _count++;
+    }
+
     /// <summary>One line of text in the monospace (Omarchy) font, vertically centred on `yCenter`,
     /// cut to `maxWidth` pixels when that's &gt; 0. Width of n characters: n * MonoAdvance * pixelSize.</summary>
     public void Text(double x, double yCenter, string text, double pixelSize, Color color, bool bold = false, double maxWidth = 0)
@@ -64,6 +84,11 @@ public sealed class Drawing
     }
 
     // The buffer the host reads: little-endian, packed (see host/drawview.cpp).
+    void Points(ReadOnlySpan<(double X, double Y)> points)
+    {
+        I(points.Length);
+        foreach (var (x, y) in points) { F(x); F(y); }
+    }
     void B(byte v) { _buf.GetSpan(1)[0] = v; _buf.Advance(1); }
     void I(int v) { BinaryPrimitives.WriteInt32LittleEndian(_buf.GetSpan(4), v); _buf.Advance(4); }
     void U(uint v) { BinaryPrimitives.WriteUInt32LittleEndian(_buf.GetSpan(4), v); _buf.Advance(4); }

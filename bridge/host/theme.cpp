@@ -1,6 +1,7 @@
 // The Omarchy theme for window apps, as `theme` in QML: every key in
 // ~/.local/state/omarchy/current/theme/colors.toml (camelCased: dark_background
-// -> theme.darkBackground) plus theme.dark. Follows theme switches live.
+// -> theme.darkBackground) plus theme.dark and theme.name (current/theme.name, e.g.
+// "tokyo-night"; "" without an Omarchy theme). Follows theme switches live.
 // (Shell panels get the same colors from the shell's own Color singleton.)
 // bridge/cs/Theme.cs reads the same file for C#: keep defaults and parsing in step.
 #include <QDir>
@@ -24,10 +25,10 @@ static QString camel(const QString &key) {
     return out;
 }
 
-static void load(QQmlPropertyMap *theme, const QString &file) {
+static void load(QQmlPropertyMap *theme, const QString &current) {
     // Defaults for machines without an Omarchy theme.
     QVariantHash v{{"mode", "dark"}, {"background", "#1a1b26"}, {"foreground", "#a9b1d6"}, {"accent", "#7aa2f7"}, {"selection", "#292e42"}, {"muted", "#414868"}, {"lighterBackground", "#24283b"}};
-    QFile f(file);
+    QFile f(current + "/theme/colors.toml");
     if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
         while (!f.atEnd()) {
             const QString line = QString::fromUtf8(f.readLine()).trimmed();
@@ -39,6 +40,8 @@ static void load(QQmlPropertyMap *theme, const QString &file) {
         }
     }
     v.insert("dark", v.value("mode").toString() != "light");
+    QFile name(current + "/theme.name");
+    v.insert("name", name.open(QIODevice::ReadOnly | QIODevice::Text) ? QString::fromUtf8(name.readAll()).trimmed() : QString());
     for (auto it = v.begin(); it != v.end(); ++it)
         if (theme->value(it.key()) != it.value()) theme->insert(it.key(), it.value());
 }
@@ -50,20 +53,20 @@ struct Theme : QQmlPropertyMap {
 QQmlPropertyMap *createTheme(QObject *parent) {
     auto *theme = new Theme(parent);
     const QString current = QDir::homePath() + "/.local/state/omarchy/current";
-    const QString file = current + "/theme/colors.toml";
-    load(theme, file);
-    // Omarchy swaps current/theme for a new directory on a theme change, so watch
-    // current/ as well as the theme directory, and re-add the watches after each change.
+    load(theme, current);
+    // Omarchy swaps current/theme for a new directory on a theme change and rewrites
+    // current/theme.name, so watch current/ as well as the theme directory and both files,
+    // and re-add the watches after each change.
     auto *watcher = new QFileSystemWatcher(theme);
     auto rewatch = [watcher, current] {
-        for (const QString &p : {current, current + "/theme", current + "/theme/colors.toml"})
+        for (const QString &p : {current, current + "/theme", current + "/theme/colors.toml", current + "/theme.name"})
             if (QFileInfo::exists(p) && !watcher->files().contains(p) && !watcher->directories().contains(p)) watcher->addPath(p);
     };
     rewatch();
     auto *debounce = new QTimer(theme);
     debounce->setSingleShot(true);
     debounce->setInterval(50);
-    QObject::connect(debounce, &QTimer::timeout, theme, [theme, file, rewatch] { rewatch(); load(theme, file); });
+    QObject::connect(debounce, &QTimer::timeout, theme, [theme, current, rewatch] { rewatch(); load(theme, current); });
     QObject::connect(watcher, &QFileSystemWatcher::fileChanged, debounce, qOverload<>(&QTimer::start));
     QObject::connect(watcher, &QFileSystemWatcher::directoryChanged, debounce, qOverload<>(&QTimer::start));
     return theme;

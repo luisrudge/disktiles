@@ -1,6 +1,6 @@
 ---
 name: omasharp
-description: Build, change and check this C# + QML Omarchy app (made with omasharp's omarchy-app template). Use for any work in this app - Backend.cs, Main.qml, plugin/Panel.qml, tests, how it looks, building, checking that it works without touching the user's screen, installing it, or updating its bridge.
+description: Build, change and check this C# + QML Omarchy app (made with Omasharp's omarchy-app template). Use for any work in this app - Backend.cs, Main.qml, plugin/Panel.qml, tests, how it looks, building, checking that it works without touching the user's screen, installing it, or updating its bridge.
 ---
 
 # A C# + QML app on Omarchy
@@ -29,12 +29,12 @@ Setup, once per machine: the .NET SDK 10 (`omarchy pkg add dotnet-sdk`). qmake6 
    sh .agents/skills/omasharp/scripts/check.sh                       # tests, dev build, run it invisibly
    sh .agents/skills/omasharp/scripts/check.sh --keys "12{Tab}3{Enter}"   # type into the app first
    ```
-   It runs the unit tests, then starts the app in a private, invisible compositor and prints every visible text in the window, top to bottom, plus any QML error. A QML error in your own files fails the check.
+   It runs the unit tests, then starts the app in a private, invisible compositor and prints every visible text in the window, top to bottom, plus any QML error. A QML error in your own files fails the check. The app starts with empty data and settings (its `XDG_*_HOME` folders are in `obj/omasharp/xdg/`), never the user's; `--seed DIR` starts it from yours ([references/checking.md](references/checking.md)).
 3. **Read the printed values and check they're right** (is the result correct? does the list show what it should?), then open `obj/shot.png` to check the layout. A successful build proves nothing about the UI. Repeat 1–3 until both are right.
 4. Finish with **`sh .agents/skills/omasharp/scripts/check.sh --release`**: the same check on the release (native AOT) build. It fails on IL2xxx/IL3xxx warnings and must show the same values.
-5. Install only if the user asked: `dotnet publish -t:Install`.
+5. Install only if the user asked: `dotnet publish -t:Install`. Publishing a release for other people (window apps: one `curl … | sh`, no sudo) also only when asked: [references/build.md](references/build.md#sharing-a-window-app).
 
-**Don't run `dotnet run` or `dotnet watch` yourself**: they open the app on the user's screen and never return. They're the human's dev loop.
+**Don't run `dotnet run` (or `dotnet watch`) yourself**: they open the app on the user's screen and never return. `dotnet run` is for the human who wants to see the app.
 
 ## What QML can see
 
@@ -52,7 +52,7 @@ Everything public on `Backend`, with the first letter lowercased:
 - **Bindings update only when C# says so.** Use `Set(ref _field, value)` in setters. For computed properties, call `Notify(nameof(Label))` whenever an input changes. Lists: assign a new list with `Set`, or call `Notify(nameof(Items))` after changing it in place.
 - Backend code runs on the UI thread; `Notify`/`Set` from any other thread is safe.
 - `Delete()`, `New()`, names starting with `_` and a few others can't be used from QML; the build says so.
-- **Every warning fails the build**, including omasharp's checks of `Backend` (OMASHARP001…): each message says the fix. Don't make `Backend`'s public members `static` (QML only sees instance members). The rules, `IDisposable` and turning a rule off for one member: [references/backend.md](references/backend.md#the-build-checks-the-backend).
+- **Every warning fails the build**, including Omasharp's checks of `Backend` (OMASHARP001…): each message says the fix. Don't make `Backend`'s public members `static` (QML only sees instance members). The rules, `IDisposable` and turning a rule off for one member: [references/backend.md](references/backend.md#the-build-checks-the-backend).
 
 ## More, when the task needs it
 
@@ -63,4 +63,5 @@ Everything public on `Backend`, with the first letter lowercased:
 | [references/look.md](references/look.md) | looking like Omarchy: `theme.*` colors and fonts in windows, the shell's `Commons.Color`/`Style`/`qs.Ui` in panels |
 | [references/panels.md](references/panels.md) | panels: lifetime, `keepLoaded`, keyboard, opening one, what isn't supported |
 | [references/drawing.md](references/drawing.md) | charts, maps, treemaps: `Drawing` + `DrawView` instead of `Canvas` |
-| [references/build.md](references/build.md) | the human's dev loop, build/install/uninstall, the app_id, extending and updating `bridge/`, troubleshooting |
+| [references/sqlite.md](references/sqlite.md) | storing data: SQLite (the system's, nothing to ship), where the database goes, AOT-safe queries |
+| [references/build.md](references/build.md) | running the app (for the human), build/install/uninstall, sharing a window app (releases, `install.sh`), the app_id, extending and updating `bridge/`, troubleshooting |

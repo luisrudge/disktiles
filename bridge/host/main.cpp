@@ -1,4 +1,4 @@
-// The omasharp host: runs Main.qml with the app's C# Backend exposed to QML as
+// The Omasharp host: runs Main.qml with the app's C# Backend exposed to QML as
 // `backend`. Properties live in a QQmlPropertyMap (so bindings work); methods are
 // JS functions on the same map (backend.increment(), backend.add(1, 2)).
 //
@@ -7,8 +7,8 @@
 //   dev      --dev <App.dll>: the normal .NET runtime through hostfxr (devhost.cpp);
 //            the app's managed Main calls back into omasharp_host_run()
 // QML comes from <exe name>.rcc next to the executable (the app's QML, fonts and
-// images, built by rcc), or from --qml-dir <dir> (dev: reloads on save). The host
-// itself is the same binary for every app: built once per machine and Qt version.
+// images, built by rcc), or from --qml-dir <dir> (dev). The host itself is the
+// same binary for every app: built once per machine and Qt version.
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -110,14 +110,6 @@ static void onNotify(const char *name, const char *json) {
     backend->insert(QString::fromUtf8(name), fromJson(json));
 }
 
-static QJSValue makeMethod, self; // dev hot reload adds methods later
-
-static void addMethod(const QString &name) {
-    if (!backend->contains(name)) backend->insert(name, QVariant::fromValue(makeMethod.call({self, name})));
-}
-
-static void onMethod(const char *name) { addMethod(QString::fromUtf8(name)); }
-
 static void onResolve(long long id, const char *text, int isError) {
     backend->settle(id, QByteArray(text), isError != 0);
 }
@@ -154,13 +146,12 @@ static bool loadNative(const QString &exe) {
     return api != nullptr;
 }
 
-int runManaged(const char *dll, const char *exe);                                  // devhost.cpp
-QQmlPropertyMap *createTheme(QObject *parent);                                     // theme.cpp
-void startTextDump(QQmlApplicationEngine &engine);                                 // textdump.cpp
-void omasharpShowDrawing(const char *name, const unsigned char *data, int len);    // drawview.cpp
-void registerDrawView();                                                           // drawview.cpp
-double omasharpMonoAdvance();                                                      // drawview.cpp
-void watchQml(QQmlApplicationEngine &engine, const QString &dir, const QUrl &url); // devhost.cpp
+int runManaged(const char *dll, const char *exe);                               // devhost.cpp
+QQmlPropertyMap *createTheme(QObject *parent);                                  // theme.cpp
+void startTextDump(QQmlApplicationEngine &engine);                              // textdump.cpp
+void omasharpShowDrawing(const char *name, const unsigned char *data, int len); // drawview.cpp
+void registerDrawView();                                                        // drawview.cpp
+double omasharpMonoAdvance();                                                   // drawview.cpp
 
 static int s_argc;
 static char **s_argv;
@@ -202,7 +193,7 @@ extern "C" __attribute__((visibility("default"))) int omasharp_host_run(const om
     }
     static QByteArray argsJson;
     argsJson = QJsonDocument(args).toJson(QJsonDocument::Compact);
-    static omasharp_host host{onNotify, onPost, onMethod, onRaised, nullptr, omasharpShowDrawing, 0, onResolve};
+    static omasharp_host host{onNotify, onPost, onRaised, nullptr, omasharpShowDrawing, 0, onResolve};
     host.args = argsJson.constData();
     host.mono_advance = omasharpMonoAdvance();
     registerDrawView();
@@ -223,13 +214,13 @@ extern "C" __attribute__((visibility("default"))) int omasharp_host_run(const om
     });
 
     // One JS function per C# method, so QML can write backend.increment().
-    makeMethod = engine.evaluate(QStringLiteral(
+    const QJSValue makeMethod = engine.evaluate(QStringLiteral(
         "(function(b, n) { return function() { return b.call(n, Array.prototype.slice.call(arguments)) } })"));
-    self = engine.newQObject(&map);
+    const QJSValue self = engine.newQObject(&map);
     QQmlEngine::setObjectOwnership(&map, QQmlEngine::CppOwnership);
-    for (const QJsonValue &m : d.value("methods").toArray()) addMethod(m.toString());
-    const bool dev = !option("--dev").isEmpty();
-    if (!dev) map.freeze(); // dev hot reload may add properties and methods
+    for (const QJsonValue &m : d.value("methods").toArray())
+        if (!map.contains(m.toString())) map.insert(m.toString(), QVariant::fromValue(makeMethod.call({self, m.toString()})));
+    map.freeze();
 
     engine.rootContext()->setContextProperty(QStringLiteral("backend"), &map);
     engine.rootContext()->setContextProperty(QStringLiteral("theme"), createTheme(&app));
@@ -248,10 +239,8 @@ extern "C" __attribute__((visibility("default"))) int omasharp_host_run(const om
         fprintf(stderr, "omasharp: could not load %s\n", qPrintable(url.toString()));
         return 1;
     }
-    if (!qmlDir.isEmpty()) watchQml(engine, qmlDir, url);
     startTextDump(engine);
     const int rc = app.exec();
-    makeMethod = self = QJSValue(); // before the engine goes away
     map.pending.clear();
     map.makeDeferred = QJSValue();
     return rc;

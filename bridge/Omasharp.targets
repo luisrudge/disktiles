@@ -1,4 +1,4 @@
-<!-- omasharp bridge build glue. Import from the app's .csproj after setting:
+<!-- Omasharp bridge build glue. Import from the app's .csproj after setting:
        OmarchyKind  window (in-process bridge, libapp.so) | panel (stdio child process)
        AppId        Wayland app_id / plugin id (default: lowercase project name)
        BackendType  the class exposed to QML as `backend` (default: Backend) -->
@@ -20,10 +20,10 @@
   </PropertyGroup>
 
   <!-- Lint: warnings fail the build, with .NET's recommended analyzers, the native AOT ones and
-       omasharp's own (Omasharp.Analyzers, OMASHARP001...: names QML can't take, members it can't
+       Omasharp's own (Omasharp.Analyzers, OMASHARP001...: names QML can't take, members it can't
        see, setters that don't tell QML, ...). Exceptions, each with its reason, go in .editorconfig.
        The app's .csproj can turn them down: OmasharpWarningsAsErrors=false (warnings stay warnings),
-       AnalysisLevel, EnableAotAnalyzer/EnableTrimAnalyzer, OmasharpAnalyzers=false (no omasharp rules, and
+       AnalysisLevel, EnableAotAnalyzer/EnableTrimAnalyzer, OmasharpAnalyzers=false (no Omasharp rules, and
        then CA1822 asks to make backend members static: QML would lose them). -->
   <PropertyGroup>
     <!-- Own switch: the SDK has already set TreatWarningsAsErrors=false by the time this runs. -->
@@ -39,7 +39,7 @@
     <!-- Lets the analyzers find the backend class when it doesn't derive from BackendBase. -->
     <CompilerVisibleProperty Include="BackendType" />
     <PackageReference Include="Omasharp.Analyzers" Version="$(OmasharpAnalyzersVersion)" PrivateAssets="all" Condition="'$(OmasharpAnalyzersProject)' == ''" />
-    <!-- omasharp's own repo: its examples use the analyzers from source. -->
+    <!-- Omasharp's own repo: its examples use the analyzers from source. -->
     <ProjectReference Include="$(OmasharpAnalyzersProject)" Condition="'$(OmasharpAnalyzersProject)' != ''"
       OutputItemType="Analyzer" ReferenceOutputAssembly="false" Private="false"
       GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishAot;OmarchyKind" />
@@ -57,13 +57,9 @@
     <LinkerArg Include="-s" />
   </ItemGroup>
 
-  <!-- Dev builds run on whatever .NET runtime the SDK has. Window apps turn startup hooks
-       back on (PublishAot turns them off) so `dotnet watch` can hot-reload C#. Panels don't:
-       their backend is a grandchild that the harness respawns on QML reloads, which hot
-       reload can't follow, so C# edits restart the harness instead (about 3 s). -->
+  <!-- Dev builds run on whatever .NET runtime the SDK has. -->
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <RollForward>LatestMajor</RollForward>
-    <StartupHookSupport Condition="'$(OmarchyKind)' == 'window'">true</StartupHookSupport>
     <DefineConstants>$(DefineConstants);OMASHARP_DEV</DefineConstants>
   </PropertyGroup>
 
@@ -82,7 +78,7 @@
     <OutputType>Library</OutputType>
     <!-- Release: the native AOT library is lib<AppId>.so, which the host <AppId> loads. -->
     <TargetName Condition="'$(Configuration)' == 'Release'">lib$(AppId)</TargetName>
-    <!-- Debug = dev mode: a managed Main run by the host through hostfxr (dotnet run / dotnet watch). -->
+    <!-- Debug = dev mode: a managed Main run by the host through hostfxr (dotnet run, check.sh). -->
     <OutputType Condition="'$(Configuration)' == 'Debug'">Exe</OutputType>
     <UseAppHost Condition="'$(Configuration)' == 'Debug'">false</UseAppHost>
     <NativeLib>Shared</NativeLib>
@@ -99,8 +95,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The host reloads QML itself; dotnet watch only needs to see C#. -->
-    <None Update="**/*.qml;**/*.js" Watch="false" />
     <!-- When bridge/ sits inside the app (the template), the default glob already has these. -->
     <Compile Remove="$(OmasharpDir)cs/*.cs" />
     <Compile Include="$(OmasharpDir)cs/*.cs" Link="bridge/%(Filename)%(Extension)" />
@@ -147,7 +141,7 @@
       <OmasharpHostDir>$(_Cache)/omasharp/host-$(_QtVersion)-$(_HostKey)/</OmasharpHostDir>
       <OmasharpHost>$(OmasharpHostDir)omasharp-host</OmasharpHost>
     </PropertyGroup>
-    <Message Condition="!Exists('$(OmasharpHost)')" Importance="high" Text="Building the omasharp host once for Qt $(_QtVersion) (about 7 s)..." />
+    <Message Condition="!Exists('$(OmasharpHost)')" Importance="high" Text="Building the Omasharp host once for Qt $(_QtVersion) (about 7 s)..." />
     <!-- Built in a private folder and moved into place, so parallel first builds can't collide. -->
     <Exec Condition="!Exists('$(OmasharpHost)')" StandardOutputImportance="low"
       Command="set -e; mkdir -p &quot;$(_Cache)/omasharp&quot;; t=%24(mktemp -d &quot;$(_Cache)/omasharp/.build.XXXXXX&quot;); cd &quot;$t&quot;; $(_Qmake) &quot;$(OmasharpDir)host/host.pro&quot; TARGET=omasharp-host DESTDIR=&quot;$t/out&quot; &amp;&amp; make -j$([System.Environment]::ProcessorCount); mkdir -p &quot;$(OmasharpHostDir)&quot;; mv -f &quot;$t/out/omasharp-host&quot; &quot;$(OmasharpHost)&quot;; rm -rf &quot;$t&quot;" />
@@ -175,7 +169,7 @@
     <Message Importance="high" Text="$(AssemblyName) -> $(_PublishFull)$(AppId) (+ lib$(AppId).so, $(AppId).rcc)" />
   </Target>
 
-  <!-- dotnet run / dotnet watch in Debug: start the dev host (window) or the panel harness.
+  <!-- dotnet run in Debug: start the dev host (window) or the panel harness.
        Set late, once TargetPath is known. -->
   <Target Name="OmasharpRunArguments" BeforeTargets="ComputeRunArguments" DependsOnTargets="OmasharpCachedHost" Condition="'$(Configuration)' == 'Debug'">
     <PropertyGroup Condition="'$(OmarchyKind)' == 'window'">
@@ -188,7 +182,7 @@
     </PropertyGroup>
   </Target>
 
-  <!-- Dev mode: make sure the cached host exists after a Debug build (dotnet watch runs it). -->
+  <!-- Dev mode: make sure the cached host exists after a Debug build. -->
   <Target Name="OmasharpDevHost" AfterTargets="Build" DependsOnTargets="OmasharpCachedHost" Condition="'$(OmarchyKind)' == 'window' and '$(Configuration)' == 'Debug'" />
 
   <Target Name="OmasharpQmlShim" AfterTargets="Publish" Condition="'$(OmarchyKind)' == 'panel'">
@@ -210,7 +204,7 @@
     <Copy SourceFiles="$(OmasharpDir)shell/dev-shell.qml" DestinationFiles="$(_PanelDev)/shell.qml" SkipUnchangedFiles="true" />
   </Target>
 
-  <!-- The command that runs this build, for the omasharp skill's check script: one argument per
+  <!-- The command that runs this build, for the Omasharp skill's check script: one argument per
        line in obj/omasharp/launch. `dotnet build -t:OmasharpLaunch` (dev) or
        `dotnet publish -t:OmasharpLaunch` (the native AOT release build) builds the app first. -->
   <PropertyGroup>
@@ -235,7 +229,7 @@
     <WriteLinesToFile File="$(MSBuildProjectDirectory)/obj/omasharp/kind" Lines="$(OmarchyKind)" Overwrite="true" />
   </Target>
 
-  <!-- dotnet build -t:UpdateBridge: bring the bridge and the omasharp skill from the installed
+  <!-- dotnet build -t:UpdateBridge: bring the bridge and the Omasharp skill from the installed
        omarchy-app template (see bridge/update.sh: your customizations are kept, never overwritten). -->
   <Target Name="UpdateBridge">
     <!-- High importance: the summary and any "is the template installed?" show at the default verbosity. -->

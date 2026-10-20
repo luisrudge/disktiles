@@ -1,4 +1,4 @@
-# The omasharp host: one small Qt program that runs Main.qml with the app's C#
+# The Omasharp host: one small Qt program that runs Main.qml with the app's C#
 # Backend exposed as `backend`. Build: qmake6 host.pro TARGET=<app> [APP_QRC=<qml.qrc>]
 QT += core gui qml quick quickcontrols2
 CONFIG += c++17 release

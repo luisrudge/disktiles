@@ -1,4 +1,4 @@
-// omasharp bridge: exposes the app's Backend class to QML.
+// Omasharp bridge: exposes the app's Backend class to QML.
 // Values cross the boundary as JSON in both transports (in-process C ABI and
 // stdio JSON lines), so Backend.cs is the same for window apps and panels.
 using System.ComponentModel;
@@ -47,12 +47,6 @@ sealed class Model
 
     void OnTargetPropertyChanged(object? sender, PropertyChangedEventArgs e) => OnPropertyChanged(e.PropertyName);
 
-    /// <summary>Stop listening to the target (dev hot reload replaces the model).</summary>
-    public void Detach()
-    {
-        if (_target is INotifyPropertyChanged npc) npc.PropertyChanged -= OnTargetPropertyChanged;
-    }
-
     public IEnumerable<string> PropertyNames => _props.Keys;
     public IEnumerable<string> MethodNames => _methods.Keys;
     public bool IsWritable(string name) => _props.TryGetValue(name, out var p) && p.SetMethod is { IsPublic: true };
@@ -64,8 +58,6 @@ sealed class Model
     {
         if (QmlNames.IsReserved(qmlName)) throw new BridgeException(QmlNames.ReservedMessage(type.Name, csName, qmlName));
     }
-
-    public void NotifyAll() => OnPropertyChanged(null);
 
     void OnPropertyChanged(string? csName)
     {

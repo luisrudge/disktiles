@@ -1,7 +1,7 @@
 // The current Omarchy theme for C# code (window apps and panels): every key in
 // ~/.local/state/omarchy/current/theme/colors.toml, camelCased like QML's `theme.*`
-// (dark_background -> "darkBackground"), plus Dark. Changed fires on the UI thread
-// when the user switches themes. Use it for colors you compute in C# (a Drawing,
+// (dark_background -> "darkBackground"), plus Dark and Name (current/theme.name).
+// Changed fires on the UI thread when the user switches themes. Use it for colors you compute in C# (a Drawing,
 // a palette), not for QML: QML has `theme.*` (windows) and `Commons.Color.*` (panels).
 // bridge/host/theme.cpp reads the same file for window QML: keep defaults and parsing in step.
 namespace Omasharp;
@@ -9,6 +9,7 @@ namespace Omasharp;
 public static class Theme
 {
     static Dictionary<string, string> s_colors = Defaults();
+    static string s_name = "";
     static FileSystemWatcher? s_watcher;
     static Timer? s_debounce;
     static Action? s_changed;
@@ -21,6 +22,9 @@ public static class Theme
     public static IReadOnlyDictionary<string, string> Colors { get { Start(); return s_colors; } }
 
     public static bool Dark => Get("mode") != "light";
+
+    /// <summary>The theme's name as Omarchy stores it, e.g. "tokyo-night"; "" without an Omarchy theme.</summary>
+    public static string Name { get { Start(); return s_name; } }
 
     public static string Get(string key, string fallback = "") => Colors.TryGetValue(key, out var v) ? v : fallback;
 
@@ -41,6 +45,7 @@ public static class Theme
             if (s_started) return;
             s_started = true;
             s_colors = Load();
+            s_name = LoadName();
             if (!Directory.Exists(StateDir)) return;
             // Omarchy swaps current/theme for a new directory: watch below current/.
             s_watcher = new FileSystemWatcher(StateDir) { IncludeSubdirectories = true, EnableRaisingEvents = true };
@@ -51,8 +56,10 @@ public static class Theme
             s_debounce = new Timer(_ =>
             {
                 var next = Load();
-                if (next.Count == s_colors.Count && next.All(kv => s_colors.TryGetValue(kv.Key, out var v) && v == kv.Value)) return;
+                var name = LoadName();
+                if (name == s_name && next.Count == s_colors.Count && next.All(kv => s_colors.TryGetValue(kv.Key, out var v) && v == kv.Value)) return;
                 s_colors = next;
+                s_name = name;
                 Ui.Post(() => s_changed?.Invoke());
             });
         }
@@ -91,6 +98,13 @@ public static class Theme
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
         return colors;
+    }
+
+    static string LoadName()
+    {
+        try { return File.ReadAllText(Path.Combine(StateDir, "theme.name")).Trim(); }
+        catch (IOException) { return ""; }
+        catch (UnauthorizedAccessException) { return ""; }
     }
 
     static string Camel(string key)

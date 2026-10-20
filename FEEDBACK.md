@@ -180,8 +180,10 @@ OMASHARP001) with clear messages.
 
 ## Changes made to this app's copy of the bridge and skill
 
+The bridge and skill are Omasharp 0.1.7, which has this app's earlier changes (the
+software-renderer fallback, item 7, in 0.1.3; the releases, item 13, in 0.1.4).
+
 | File | Change | Why |
 |---|---|---|
-| `bridge/host/drawview.cpp` | software-renderer fallback (item 7) | the treemap was empty without a GPU and in offscreen snapshots |
-| `bridge/install.sh`, `bridge/desktop.sh`, `bridge/Omasharp.targets` | releases and the one-command install (item 13; `desktop.sh` and `app.desktop` from omasharp PR #2) | users install without building it |
+| `.github/workflows/release.yml` | `actions/checkout` pinned to a SHA (item 14) | this repo only runs pinned actions |
 | `bench/bench.sh` (copy of `tools/bench.sh`) | a workspace per run, the app found by pid (item 6) | parallel benchmarks killed each other's apps |

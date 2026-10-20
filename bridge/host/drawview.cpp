@@ -1,14 +1,15 @@
 // DrawView: native drawing for window apps. C# builds a Drawing (rectangles, outlines,
-// hatching, text) and sends it as one packed buffer with Bridge.Show(name, drawing). Any
-// `DrawView { source: name }` in QML shows it, built straight into Qt Quick's scene graph:
-// all shapes in one vertex-coloured geometry (one draw call), text as native text nodes.
+// hatching, lines, areas, text) and sends it as one packed buffer with Bridge.Show(name,
+// drawing). Any `DrawView { source: name }` in QML shows it, built straight into Qt Quick's
+// scene graph: all shapes in one vertex-coloured geometry (one draw call; one image under Qt's
+// software renderer), text as native text nodes.
 // No JSON, no JavaScript, no full-window image. `view: [scale, x, y]` moves and zooms what
 // is already built (a transform), so panning and zooming cost nothing until C# sends a
 // fresh drawing.
 #include <QFontMetricsF>
 #include <QHash>
-#include <QQuickItem>
 #include <QPainter>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QSGGeometryNode>
 #include <QSGImageNode>
@@ -18,6 +19,7 @@
 #include <QSGVertexColorMaterial>
 #include <QTextLayout>
 #include <QtMath>
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <vector>
@@ -124,9 +126,98 @@ void hatch(std::vector<QSGGeometry::ColoredPoint2D> &t, float x, float y, float 
     }
 }
 
+void triangle(std::vector<QSGGeometry::ColoredPoint2D> &t, QPointF a, QPointF b, QPointF c, quint32 argb) {
+    t.push_back(vertex(a.x(), a.y(), argb));
+    t.push_back(vertex(b.x(), b.y(), argb));
+    t.push_back(vertex(c.x(), c.y(), argb));
+}
+
+// Lines `width` thick through the points, one quad per segment. At a corner the two quads share
+// the inner corner (where their inner edges meet), so nothing is drawn twice and a translucent
+// line keeps one shade. The outer corner is mitred, or bevelled (a triangle) when the corner is
+// sharper than 60°, where a mitre would stick out as a long spike. When a segment is too short
+// for the inner corner (a sharp turn between close points), the quads end square at the point
+// instead, and overlap a little inside the turn.
+void polyline(std::vector<QSGGeometry::ColoredPoint2D> &t, const std::vector<QPointF> &p, float width, quint32 argb) {
+    if (p.size() < 2 || !(width > 0) || !std::isfinite(width)) return;
+    const qreal hw = width / 2;
+    std::vector<QPointF> dir; // unit direction of each segment
+    std::vector<qreal> len;
+    dir.reserve(p.size() - 1);
+    len.reserve(p.size() - 1);
+    for (size_t i = 0; i + 1 < p.size(); i++) {
+        const QPointF d = p[i + 1] - p[i];
+        len.push_back(std::hypot(d.x(), d.y()));
+        dir.push_back(len.back() > 0 ? d / len.back() : QPointF());
+    }
+    const auto normal = [](QPointF d) { return QPointF(-d.y(), d.x()); };
+    QPointF left = p[0] + normal(dir[0]) * hw, right = p[0] - normal(dir[0]) * hw; // the current segment's start
+    for (size_t i = 0; i < dir.size(); i++) {
+        const QPointF n = normal(dir[i]), at = p[i + 1];
+        QPointF endLeft = at + n * hw, endRight = at - n * hw, nextLeft = endLeft, nextRight = endRight;
+        if (i + 1 < dir.size()) {
+            const QPointF n2 = normal(dir[i + 1]), m = n + n2;
+            nextLeft = at + n2 * hw;
+            nextRight = at - n2 * hw;
+            const qreal turn = dir[i].x() * dir[i + 1].y() - dir[i].y() * dir[i + 1].x();
+            const qreal mlen = std::hypot(m.x(), m.y());
+            const qreal cosHalf = mlen / 2; // cos of half the turn: corners are hw / cosHalf from the point
+            if (turn != 0 && mlen > 1e-6) {
+                // The inside of the turn is on the left when it turns left (turn > 0).
+                const bool leftInside = turn > 0;
+                QPointF &endIn = leftInside ? endLeft : endRight, &nextIn = leftInside ? nextLeft : nextRight;
+                QPointF &endOut = leftInside ? endRight : endLeft, &nextOut = leftInside ? nextRight : nextLeft;
+                const QPointF toInner = m / mlen * (hw / cosHalf) * (leftInside ? 1 : -1);
+                // How far back along each segment the inner corner is.
+                const qreal reach = hw * std::sqrt(std::max(0.0, 1 - cosHalf * cosHalf)) / cosHalf;
+                const bool shared = reach <= std::min(len[i], len[i + 1]) / 2;
+                if (shared) endIn = nextIn = at + toInner;
+                if (cosHalf >= 0.5 && shared)
+                    endOut = nextOut = at - toInner;
+                else if (cosHalf >= 0.5) {
+                    triangle(t, at, endOut, at - toInner, argb);
+                    triangle(t, at, at - toInner, nextOut, argb);
+                } else
+                    triangle(t, shared ? endIn : at, endOut, nextOut, argb);
+            }
+        }
+        quad(t, left, endLeft, endRight, right, argb);
+        left = nextLeft;
+        right = nextRight;
+    }
+}
+
+// The area between the line through the points and the level `base`: a trapezoid per segment,
+// split where the line crosses the base (a crossed quad would fill the wrong triangles).
+void area(std::vector<QSGGeometry::ColoredPoint2D> &t, const std::vector<QPointF> &p, float base, quint32 argb) {
+    if (!std::isfinite(base)) return;
+    for (size_t i = 0; i + 1 < p.size(); i++) {
+        const QPointF a = p[i], b = p[i + 1];
+        const qreal da = a.y() - base, db = b.y() - base;
+        if ((da < 0 && db > 0) || (da > 0 && db < 0)) {
+            const QPointF cross(a.x() + (b.x() - a.x()) * da / (da - db), base);
+            triangle(t, a, cross, {a.x(), base}, argb);
+            triangle(t, cross, b, {b.x(), base}, argb);
+        } else
+            quad(t, a, b, {b.x(), base}, {a.x(), base}, argb);
+    }
+}
+
 // The buffer Drawing.cs writes (little-endian): "ODL1", double scale, x, y, int32 count, ops.
 struct Reader {
     const uchar *p, *end;
+    // n (int32), then n float pairs: the points of a Polyline or Area. Points that aren't finite,
+    // and repeats of the point before, are dropped. False when the buffer is too short.
+    bool points(std::vector<QPointF> &out) {
+        const qint32 n = get<qint32>();
+        if (n < 0 || n > (end - p) / 8) return false;
+        out.clear();
+        for (int i = 0; i < n; i++) {
+            const float x = get<float>(), y = get<float>();
+            if (std::isfinite(x) && std::isfinite(y) && (out.empty() || out.back() != QPointF(x, y))) out.emplace_back(x, y);
+        }
+        return true;
+    }
     template <class T>
     T get() {
         T v{};
@@ -149,6 +240,7 @@ std::shared_ptr<const Scene> parse(const uchar *data, int len) {
     scene->originY = r.get<double>();
     const int count = r.get<qint32>();
     QHash<quint32, int> groupOf;
+    std::vector<QPointF> points;
     for (int i = 0; i < count && r.p < r.end; i++) {
         const uchar op = r.get<uchar>();
         if (op == 1) { // Rect
@@ -190,6 +282,16 @@ std::shared_ptr<const Scene> parse(const uchar *data, int len) {
             }
             const QPointF topLeft(x, y - (f.metrics.ascent() + f.metrics.descent()) / 2);
             scene->texts[*it].items.push_back({topLeft, layoutFor(text, f, px, bold)});
+        } else if (op == 5) { // Polyline (Line is one with two points)
+            const float width = r.get<float>();
+            const quint32 c = r.get<quint32>();
+            if (!r.points(points)) break;
+            polyline(scene->triangles, points, width, c);
+        } else if (op == 6) { // Area, down (or up) to a baseline
+            const float base = r.get<float>();
+            const quint32 c = r.get<quint32>();
+            if (!r.points(points)) break;
+            area(scene->triangles, points, base, c);
         } else
             break; // unknown op: stop rather than misread the rest
     }
@@ -255,11 +357,9 @@ protected:
                 delete child;
             }
             m_built = m_scene;
-            // disktiles: Qt Quick's software renderer (no GPU, QT_QUICK_BACKEND=software, the
-            // offscreen platform) draws no QSGVertexColorMaterial, so the shapes vanished and only
-            // the text showed. There, paint the same triangles into an image instead.
-            if (m_built && !m_built->triangles.empty()
-                && window()->rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
+            // Qt Quick's software renderer (no GPU, QT_QUICK_BACKEND=software, check.sh --offscreen)
+            // doesn't draw QSGVertexColorMaterial: there, paint the same triangles into an image.
+            if (m_built && !m_built->triangles.empty() && window()->rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
                 root->appendChildNode(softwareNode(*m_built));
             } else if (m_built && !m_built->triangles.empty()) {
                 auto *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_ColoredPoint2D(), int(m_built->triangles.size()));
@@ -297,15 +397,21 @@ private:
     QSGNode *softwareNode(const Scene &scene) {
         float x0 = scene.triangles[0].x, y0 = scene.triangles[0].y, x1 = x0, y1 = y0;
         for (const auto &v : scene.triangles) {
-            x0 = std::min(x0, v.x); y0 = std::min(y0, v.y);
-            x1 = std::max(x1, v.x); y1 = std::max(y1, v.y);
+            x0 = std::min(x0, v.x);
+            y0 = std::min(y0, v.y);
+            x1 = std::max(x1, v.x);
+            y1 = std::max(y1, v.y);
         }
         const QRectF area(std::floor(x0), std::floor(y0), std::ceil(x1) - std::floor(x0), std::ceil(y1) - std::floor(y0));
-        const qreal dpr = window()->effectiveDevicePixelRatio();
-        QImage image(QSize(qMax(1, qCeil(area.width() * dpr)), qMax(1, qCeil(area.height() * dpr))), QImage::Format_ARGB32_Premultiplied);
+        // At most 4096 pixels each way (64 MB): shapes spread far apart are drawn at a lower
+        // resolution rather than in a huge image.
+        const qreal dpr = window()->effectiveDevicePixelRatio(), maxSide = 4096;
+        const qreal sx = qMin(dpr, maxSide / qMax(1.0, area.width())), sy = qMin(dpr, maxSide / qMax(1.0, area.height()));
+        QImage image(QSize(qBound(1, qCeil(area.width() * sx), int(maxSide)), qBound(1, qCeil(area.height() * sy), int(maxSide))), QImage::Format_ARGB32_Premultiplied);
+        if (image.isNull()) return new QSGNode; // out of memory: no shapes rather than a crash
         image.fill(Qt::transparent);
         QPainter painter(&image);
-        painter.scale(dpr, dpr);
+        painter.scale(sx, sy);
         painter.translate(-area.topLeft());
         painter.setPen(Qt::NoPen);
         for (size_t i = 0; i + 2 < scene.triangles.size(); i += 3) {

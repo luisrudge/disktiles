@@ -13,7 +13,7 @@ static class Shim
         var program = AppInfo.Name;
         var sb = new StringBuilder();
         sb.Append($$"""
-            // Generated from Backend.cs by the omasharp bridge. Don't edit: rebuild instead.
+            // Generated from Backend.cs by the Omasharp bridge. Don't edit: rebuild instead.
             // Runs the C# backend as a child process; a crash there can't take the shell down.
             import QtQuick
             import Quickshell
@@ -24,7 +24,7 @@ static class Shim
 
               // The backend program (native AOT). Default: bin/{{program}} next to this file.
               property string program: decodeURIComponent(Qt.resolvedUrl("bin/{{program}}").toString().replace("file://", ""))
-              // Dev mode (dotnet run / dotnet watch): run the JIT build instead.
+              // Dev mode (dotnet run, check.sh): run the JIT build instead.
               readonly property string _devDll: Quickshell.env("OMASHARP_BACKEND_DLL") || ""
               property var command: _devDll ? [Quickshell.env("DOTNET_HOST_PATH") || "dotnet", _devDll] : [program]
               property bool active: true

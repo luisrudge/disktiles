@@ -14,7 +14,6 @@ unsafe struct HostApi
 {
     public delegate* unmanaged<byte*, byte*, void> Notify; // name, JSON value; UI thread only
     public delegate* unmanaged<long, void> Post;           // any thread; host calls RunPosted(token) on the UI thread
-    public delegate* unmanaged<byte*, void> Method;        // dev hot reload: a method appeared on Backend
     public delegate* unmanaged<byte*, byte*, void> Raised; // name, JSON value; UI thread only
     public byte* Args;                                     // JSON array of the app's arguments
     public delegate* unmanaged<byte*, byte*, int, void> Draw; // Bridge.Show: name, Drawing buffer, length; UI thread
@@ -38,7 +37,7 @@ unsafe struct Api
 
 static unsafe class NativeExports
 {
-    const int Abi = 3; // OMASHARP_ABI in omasharp.h
+    const int Abi = 4; // OMASHARP_ABI in omasharp.h
     static Api* s_api;
     static HostApi s_host;
     static Model? s_model;
@@ -100,7 +99,13 @@ static unsafe class NativeExports
         try
         {
             s_backend = new AppBackend();
-            s_model = CreateModel();
+            s_model = new Model(typeof(AppBackend), s_backend);
+            s_model.Changed += (name, value) =>
+            {
+                var n = Utf8(name);
+                var v = Utf8(value);
+                try { s_host.Notify(n, v); } finally { NativeMemory.Free(n); NativeMemory.Free(v); }
+            };
             return Utf8(s_model.Describe());
         }
         catch (Exception e)
@@ -108,34 +113,6 @@ static unsafe class NativeExports
             Log.Error("starting Backend", e);
             return null;
         }
-    }
-
-    static Model CreateModel()
-    {
-        var model = new Model(typeof(AppBackend), s_backend!);
-        model.Changed += (name, value) =>
-        {
-            var n = Utf8(name);
-            var v = Utf8(value);
-            try { s_host.Notify(n, v); } finally { NativeMemory.Free(n); NativeMemory.Free(v); }
-        };
-        return model;
-    }
-
-    // Dev hot reload: Backend may have new members. Look again, tell the host about
-    // new methods, and resend every property (new ones included).
-    internal static void Reload()
-    {
-        if (s_backend == null) return;
-        s_model?.Detach();
-        s_model = CreateModel();
-        Console.Error.WriteLine($"omasharp: Backend now has {s_model.PropertyNames.Count()} properties, {s_model.MethodNames.Count()} methods");
-        foreach (var name in s_model.MethodNames)
-        {
-            var n = Utf8(name);
-            try { s_host.Method(n); } finally { NativeMemory.Free(n); }
-        }
-        s_model.NotifyAll();
     }
 
     [UnmanagedCallersOnly]
