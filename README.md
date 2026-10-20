@@ -1,12 +1,14 @@
-# disktiles-omasharp
+# disktiles
 
 <img src="icon.svg" width="96" align="right" alt="">
 
-[disktiles](https://github.com/luisrudge/disktiles) rebuilt as an
-[omasharp](https://github.com/luisrudge/omasharp) app: see what is using your disk as a map of
-tiles, mark what should go, review the list, and move it to the trash. The original is C# and
-GTK 4. This one is C# (native AOT) and QML, made with the `omarchy-app` template
-(`Omasharp.Templates` 0.1.1), for Omarchy on Linux.
+See what is using your disk as a map of tiles, mark what should go, review the list, and move it
+to the trash. An [omasharp](https://github.com/luisrudge/omasharp) app for Omarchy: C# (native
+AOT) and QML, made with the `omarchy-app` template (`Omasharp.Templates` 0.1.1).
+
+Up to 0.2.0, disktiles was a GTK 4 app for Linux, macOS and Windows (the
+[v0.2.0 release](https://github.com/luisrudge/disktiles/releases/tag/v0.2.0) and the git history
+before 0.3.0). Below, "the original" is that version.
 
 ![The scratch home folder as tiles, with the pointer over ubuntu.iso](docs/screenshots/treemap.png)
 
@@ -20,25 +22,22 @@ GTK 4. This one is C# (native AOT) and QML, made with the `omarchy-app` template
   mount inside it. It moves things to the trash by default, and a permanent deletion always asks
   first.
 
-The app id (and command) is `disktiles-omasharp`, so it can sit next to the original
-(`io.github.luisrudge.disktiles`, command `disktiles`).
-
 ## Install
 
 On Omarchy, for your user only (no sudo, and no .NET: it's native code on the Qt Omarchy ships):
 
 ```sh
-curl -fsSL https://github.com/luisrudge/disktiles-omasharp/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/luisrudge/disktiles/releases/latest/download/install.sh | sh
 ```
 
 Run it again to update. To remove it:
 
 ```sh
-curl -fsSL https://github.com/luisrudge/disktiles-omasharp/releases/latest/download/install.sh | sh -s uninstall
+curl -fsSL https://github.com/luisrudge/disktiles/releases/latest/download/install.sh | sh -s uninstall
 ```
 
-It puts DiskTiles in the app launcher, the app in `~/.local/share/omasharp/disktiles-omasharp/`
-and the `disktiles-omasharp` command in `~/.local/bin`. The script checks the download against
+It puts DiskTiles in the app launcher, the app in `~/.local/share/omasharp/disktiles/`
+and the `disktiles` command in `~/.local/bin`. The script checks the download against
 the release's `SHA256SUMS`, and stops without installing anything if your system's Qt is older
 than the one the release was built with (then update Omarchy and run it again). Releases are
 x86_64 only. Elsewhere on Arch it needs `qt6-declarative`.
@@ -46,10 +45,10 @@ x86_64 only. Elsewhere on Arch it needs `qt6-declarative`.
 ## Use
 
 ```sh
-disktiles-omasharp                   # your home folder
-disktiles-omasharp ~/projects        # a folder
-disktiles-omasharp --disk            # the whole disk
-disktiles-omasharp --help            # every option
+disktiles                   # your home folder
+disktiles ~/projects        # a folder
+disktiles --disk            # the whole disk
+disktiles --help            # every option
 ```
 
 Inside, `?` lists every key: arrows or `hjkl` to move, Enter to open, Backspace to go up, Space
@@ -65,7 +64,7 @@ to mark, `c` to review the marked list, `/` to filter by name.
 
 ## Feature parity
 
-Every feature of the original (luisrudge/disktiles 0.2.0, `ec3b32d`) on Linux, and where it
+Every feature of the original (0.2.0, `ec3b32d`) on Linux, and where it
 stands here. ✅ ported and checked · ➖ there, but done differently (the note says how) ·
 — not in either app.
 
@@ -82,7 +81,7 @@ stands here. ✅ ported and checked · ➖ there, but done differently (the note
 | The saved preset in `~/.config/disktiles/power-efficiency` | ✅ | Same file as the original, so both apps share it. Read-only in both |
 | `--metric files\|bytes` | ✅ | |
 | `--snapshot FILE` (PNG once the scan is shown, then quit; 1 on failure) | ➖ | Qt's `grabToImage`. No "second window" check: every launch is its own window, as in the original |
-| `-V/--version`, `-h/--help` | ✅ | They name `disktiles-omasharp` |
+| `-V/--version`, `-h/--help` | ✅ | |
 | One scan at a time; a new one cancels the old; cancel never shows a partial tree | ✅ | |
 | Scan overlay: spinner, "Reading …", files, directories, measured, unreadable, meter, Cancel / Scan again, errors | ✅ | |
 | Footer status: scanning… / `scan 12.4k entries · 0.2 s` / cancelled / failed | ✅ | |
@@ -274,9 +273,9 @@ Install your own build the way the script does (the same files, from the same `i
 `dotnet publish -t:Install`, and `dotnet build -t:Uninstall` to remove it.
 
 **Releasing:** set `<Version>` in `DiskTiles.csproj`, then push a tag that matches it
-(`git tag v0.2.0 && git push origin v0.2.0`). `.github/workflows/release.yml` tests the app,
+(`git tag v0.3.0 && git push origin v0.3.0`). `.github/workflows/release.yml` tests the app,
 builds it on Omarchy's stable packages (so every up-to-date Omarchy can run it), and attaches
-`dotnet publish -t:Package`'s files to a GitHub release: `disktiles-omasharp-linux-x64.tar.gz`,
+`dotnet publish -t:Package`'s files to a GitHub release: `disktiles-linux-x64.tar.gz`,
 `SHA256SUMS` and `install.sh`.
 
 What the template, bridge, skill and analyzers got wrong or lacked, with fixes:
@@ -285,4 +284,5 @@ What the template, bridge, skill and analyzers got wrong or lacked, with fixes:
 ## Credits
 
 disktiles is by Luis Rudge, and started as a C# port of [disktree](https://github.com/tobi/disktree).
-This port reuses its core (MIT licensed, like disktree) and an earlier experimental QML port.
+This version reuses the original's core and an earlier experimental QML port. MIT licensed
+([LICENSE](LICENSE)), like disktree.

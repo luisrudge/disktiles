@@ -19,9 +19,9 @@ sealed record Cli(string Root, ScanOptions Options, uint Depth, Power? Power, st
         ?? "unknown";
 
     public const string Usage = """
-        disktiles-omasharp — a treemap of what is using your disk
+        disktiles — a treemap of what is using your disk
 
-        usage: disktiles-omasharp [OPTIONS] [PATH]
+        usage: disktiles [OPTIONS] [PATH]
 
         arguments:
           PATH              directory to scan (default: the home directory)

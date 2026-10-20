@@ -3,9 +3,9 @@
     <!-- window: Main.qml in a native window. panel: plugin/Panel.qml inside omarchy-shell. -->
     <OmarchyKind>window</OmarchyKind>
     <!-- The Wayland app_id (window rules match on it) or the shell plugin id. -->
-    <AppId>disktiles-omasharp</AppId>
+    <AppId>disktiles</AppId>
     <AppName>DiskTiles</AppName>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <!-- The test hooks (App/Hooks.cs): debug builds, or dotnet publish -p:TestHooks=true. -->
     <DefineConstants Condition="'$(Configuration)' == 'Debug' or '$(TestHooks)' == 'true'">$(DefineConstants);TEST_HOOKS</DefineConstants>
   </PropertyGroup>
